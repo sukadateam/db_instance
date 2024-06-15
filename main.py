@@ -4,6 +4,14 @@
 #         | I've been having issues trying to map out how I want the handler to work with all other functions. So i said, fuck everything else, i'll rebuild those after and work around a good working hanlder
 # Use of instances will be used for each database
 
+# Ideas for settings:
+# max_allowsRows - A db can only have ? rows within it.
+
+def incrimatationHandler():
+    '''The use of instances makes usage of a single variable difficult along with other management issues. This helps with that :)-'''
+    # Functions to apply incrimataions to:
+    # db_Handler.mkGlobalTempVars()
+    pass
 class db_Handler:
     '''An extremely simple, but yet thought out hanlder. :)-'''
     def __init__(self) -> None:
@@ -65,6 +73,9 @@ class db_Handler:
             else:
                 raise Exception('\n\nCall Function: --> db_Handler.edit.removeColumn()\nColumn must be a string. Please and thank you.')
         def removeRow(self):
+            '''Remove a row from the database! Give me the index of the row to remove. The index starts from 0.
+            - To get a index range
+            - To return the row of an index use: data.row_indexLookup()'''
             pass
         def addRow(self, row):
             '''Add a new row to the database! Give me a list of data to add. The list cannot be longer or shorter than the column count.'''
@@ -118,6 +129,15 @@ class db_Handler:
             return self.handler.info[0]
         def columns(self):
             return self.handler.columnStorage
+        def row_indexLookup(self, index):
+            '''Returns the data of a row based on the index given. The index starts from 0.'''
+            return self.handler.listStorage[index]
+        def row_indexRangeCount(self):
+            '''Returns the amount of rows in the database. This function subtracts 1 as the index starts from 0. So 5 items in a list will return 4 since the index starts from 0.'''
+            out = len(self.handler.listStorage)
+            if out > 0:
+                return out-1
+            return 0
     class Save:
         def __init__(self, handler):
             self.handler = handler
