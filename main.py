@@ -72,10 +72,11 @@ class db_Handler:
                 raise Exception('\n\nCall Function: --> db_Handler.edit.removeColumn()\nAn unknown error happened :(')
             else:
                 raise Exception('\n\nCall Function: --> db_Handler.edit.removeColumn()\nColumn must be a string. Please and thank you.')
-        def removeRow(self):
+        def removeRow(self, index):
             '''Remove a row from the database! Give me the index of the row to remove. The index starts from 0.
-            - To get a index range
-            - To return the row of an index use: data.row_indexLookup()'''
+            - To get a index range use: data.row_indexRangeCount()
+            - To return the row of an index use: data.row_indexLookup()
+            '''
             pass
         def addRow(self, row):
             '''Add a new row to the database! Give me a list of data to add. The list cannot be longer or shorter than the column count.'''
@@ -138,6 +139,49 @@ class db_Handler:
             if out > 0:
                 return out-1
             return 0
+        def findRowWithValues(self, columns, value):
+            '''Returns the index of a row with one or multiple values. Specify column for each. If multiple rows have the same value, it will return the first row found.
+            Read below for how returns are handled.
+            Usage Ex:
+            columns = ['Name', 'Age']
+            value = ['Mike', 23]
+            
+            Args:
+            - Columns: The columns to search for the value in
+            - Value: The value to search for
+            
+            Returns:
+            Example: [[0, 1], [2, 1], [9, 2]]
+            - First value: is index of row
+            - Second value: is amount of matches with data given for the row found.
+            '''
+            # Indexs Of Found matches
+            found = []
+            columnSearch = self.handler.columnStorage
+            columnIndexsForSearch = []
+            # Get indexs of columns, for faster searching
+            for i in range(len(columns)):
+                if columns[i] in columnSearch:
+                    columnIndexsForSearch.append(columnSearch.index(columns[i]))
+                else:
+                    raise Exception('\n\nCall Function: --> db_Handler.Data.findRowWithValues()\nColumn does not exist in database.')
+            
+            # Search for values, and count matches for each row
+            print('Indexs:', columnIndexsForSearch)
+            for x in range(len(self.handler.listStorage)):
+                matchesForThisRow = 0
+                for y in range(len(columnIndexsForSearch)):
+                    if self.handler.listStorage[x][columnIndexsForSearch[y]] == value[y]:
+                        matchesForThisRow += 1
+                if matchesForThisRow > 0:
+                    found.append([x, matchesForThisRow])
+
+            # Verify found has values
+            # --> If not, return None
+            if found == []:
+                return None
+            # <-- If so, return found
+            return found
     class Save:
         def __init__(self, handler):
             self.handler = handler
@@ -185,13 +229,14 @@ print('Status',MonkeyDB.data.returnStatus())
 print('Creating columns...')
 MonkeyDB.edit.addColumn('Names')
 MonkeyDB.edit.addColumn('Is Stupid?')
+MonkeyDB.edit.addColumn('Is Human?')
 print('Columns:',MonkeyDB.data.columns(),'\n\n')
 
 
 # Add row:
 print('Adding rows...')
-MonkeyDB.edit.addRow(['Turtle', 'Yes'])
-MonkeyDB.edit.addRow(['Mike', 'No'])
+MonkeyDB.edit.addRow(['Turtle', 'Yes', 'Perhaps'])
+MonkeyDB.edit.addRow(['Mike', 'No', 'Most Likely'])
 print('Rows:',MonkeyDB.listStorage,'\n\n')
 
 # Remove column:
@@ -199,6 +244,15 @@ print('Removing column...')
 MonkeyDB.edit.removeColumn('Names')
 print('Columns:',MonkeyDB.data.columns())
 print('Rows:',MonkeyDB.listStorage,'\n\n')
+
+# Remove row:
+print('Removing Row:')
+output = MonkeyDB.data.row_indexRangeCount()
+print('row_indexRangeCount return:',output)
+output1 = MonkeyDB.data.findRowWithValues(columns=['Is Human?', 'Is Stupid?'], value=['Perhaps', 'Yes'])
+print('findRowWithValues return:',output1)
+
+MonkeyDB.edit.removeRow(0)
 
 # Save database:
 
