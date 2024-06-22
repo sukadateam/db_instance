@@ -44,11 +44,15 @@ class db_Handler:
     class Edit:
         def __init__(self, handler):
             self.handler = handler
-        def addColumn(self, column):
+        def addColumn(self, column, value=None):
             '''Add a new column to the database!
             
             Args:
-            - Column(str): The name of the column'''
+            - Column(str): The name of the column
+            - Value(str/None): The value to fill the empty rows with for the new column. (Default is None)
+            
+            Notes:
+            All rows for this column will be empty. Use mods.EmptyEntryFill() to fill empty values in rows.'''
             if type(column) == str:
                 self.handler.columnStorage.append(column)
             else:
@@ -116,29 +120,45 @@ class db_Handler:
                 return
             else:
                 raise Exception('\n\nCall Function: --> db_Handler.mods.RemoveEmptyColumnData()\nColumn must be either int or str.')
-        def EmptyEntryFill(self, column, value):
+        def EmptyEntryFill(self, column, value, NoListValue=['', None], doesIndexForColumnExist=True):
             '''Used after creating a new column to fill all rows with no value to have a value.
-            
-            Args:
-            - column: The column to fill empty values with
-            - value: The value to fill the empty values with'''
-            pass
+            \n
+            \nArgs:
+            \n- column: The column to fill empty values with
+            \n- value: The value to fill the empty values with
+            \n- NoListValue: The values to consider as empty. Default is ['', None]
+            \n- doesIndexForColumnExist: Does the column have an index created for each row?
+            \n    Ex: This example doesn't have an index for each row yet. So it would be False.
+            \n    Name | Age | New Column
+            \n    Mike | 23  | 
+            \n    Mark | 24  |'''
+            rows = self.handler.listStorage
+            columns = self.handler.columnStorage.index(column) # Gets index of specified column
+            for i in range(len(rows)):
+                for emptyValue in NoListValue:
+                    if rows[i][columns] == emptyValue:
+                        rows[i][columns] = value
     class Data:
         def __init__(self, handler):
             self.handler = handler
+            
         def returnStatus(self):
             return self.handler.info[0]
+        
         def columns(self):
             return self.handler.columnStorage
+        
         def row_indexLookup(self, index):
             '''Returns the data of a row based on the index given. The index starts from 0.'''
             return self.handler.listStorage[index]
+        
         def row_indexRangeCount(self):
             '''Returns the amount of rows in the database. This function subtracts 1 as the index starts from 0. So 5 items in a list will return 4 since the index starts from 0.'''
             out = len(self.handler.listStorage)
             if out > 0:
                 return out-1
             return 0
+        
         def findRowWithValues(self, columns, value):
             '''Returns the index of a row with one or multiple values. Specify column for each. If multiple rows have the same value, it will return the first row found.
             Read below for how returns are handled.
@@ -182,6 +202,69 @@ class db_Handler:
                 return None
             # <-- If so, return found
             return found
+    
+        def displayDataOnScreen(self, displayIndex=True):
+            '''Prints the table on the screen.'''
+            print('< Table for Database: '+str(self.handler.tag[0])+' >')
+            columnsNeat='|'
+            # Start with the columns
+            columns = self.handler.columnStorage
+            for i in range(len(self.handler.columnStorage)):
+                columnsNeat+=self.handler.space(var = columns[i], max_length=15, hide=True, centerText=True)+'|'
+            # Print it!
+            print(columnsNeat)
+            for x in range(len(columnsNeat)):
+                print('-', end='')
+            print()
+
+            # Now the rows
+            rows=self.handler.listStorage
+            for x in range(len(rows)):
+                rowsNeat='|'
+                for y in range(len(rows[x])):
+                    rowsNeat+=self.handler.space(var = rows[x][y], max_length=15, hide=True, centerText=True)+'|'
+                if displayIndex:
+                    print(rowsNeat, 'Index:', x)
+                else:
+                    print(rowsNeat)
+            
+
+    # Reused from my old handler. Why change something that works? :)- Did make a few changes to it tho.
+    def space(self, var=None, max_length=10, hide=False, return_ShortenNotice=False, centerText=False):
+        var = str(var)
+        if isinstance(var, str):
+            if centerText:
+                var = var.center(max_length)
+                return var
+            else:
+                length = len(var)
+                if hide == False: print('Input length:', length)
+                notice = False
+                if length < max_length:
+                    # Add spaces to fit
+                    if hide == False: print('Total spaces to add:', max_length - length)
+                    for i in range(max_length - length):
+                        var += ' '
+                    if hide == False: print('Final Length:', len(var))
+                    if return_ShortenNotice == True:
+                        return var, notice
+                    else:
+                        return var
+                if length > max_length:
+                    # Shorten to fit
+                    var = var[0:max_length]
+                    if hide == False: print('Final Length:', len(var))
+                    notice = True
+                    if return_ShortenNotice == True:
+                        return var, notice
+                    else:
+                        return var
+                if return_ShortenNotice == True:
+                    return var, False
+                else:
+                    return var
+        else:
+            if hide == False: print('Error: Input is not string.')
     class Save:
         def __init__(self, handler):
             self.handler = handler
@@ -230,13 +313,25 @@ print('Creating columns...')
 MonkeyDB.edit.addColumn('Names')
 MonkeyDB.edit.addColumn('Is Stupid?')
 MonkeyDB.edit.addColumn('Is Human?')
+MonkeyDB.edit.addColumn('Is Smart?')
+MonkeyDB.edit.addColumn('Is Alive?')
+MonkeyDB.edit.addColumn('Is Dead?')
 print('Columns:',MonkeyDB.data.columns(),'\n\n')
 
 
 # Add row:
 print('Adding rows...')
-MonkeyDB.edit.addRow(['Turtle', 'Yes', 'Perhaps'])
-MonkeyDB.edit.addRow(['Mike', 'No', 'Most Likely'])
+MonkeyDB.edit.addRow(['Turtle', 'Yes', 'Perhaps', 'No', 'Yes', 'No'])
+MonkeyDB.edit.addRow(['Mike', 'No', 'Most Likely', 'Yes', 'Yes', 'No'])
+MonkeyDB.edit.addRow(['Mark', 'Yes', 'Perhaps', 'No', 'Yes', 'No'])
+MonkeyDB.edit.addRow(['Turtle', 'Yes', 'Perhaps', 'No', 'Yes', 'No'])
+MonkeyDB.edit.addRow(['Mike', 'No', 'Most Likely', 'Yes', 'Yes', 'No'])
+MonkeyDB.edit.addRow(['Mark', 'Yes', 'Perhaps', 'No', 'Yes', 'No'])
+MonkeyDB.edit.addRow(['Turtle', 'Yes', 'Perhaps', 'No', 'Yes', 'No'])
+MonkeyDB.edit.addRow(['Mike', 'No', 'Most Likely', 'Yes', 'Yes', 'No'])
+MonkeyDB.edit.addRow(['Mark', 'Yes', 'Perhaps', 'No', 'Yes', 'No'])
+MonkeyDB.edit.addRow(['Turtle', 'Yes', 'Perhaps', 'No', 'Yes', 'No'])
+MonkeyDB.edit.addRow(['Mike', 'No', 'Most Likely', 'Yes', 'Yes', 'No'])
 print('Rows:',MonkeyDB.listStorage,'\n\n')
 
 # Remove column:
@@ -253,6 +348,15 @@ output1 = MonkeyDB.data.findRowWithValues(columns=['Is Human?', 'Is Stupid?'], v
 print('findRowWithValues return:',output1)
 
 MonkeyDB.edit.removeRow(0)
+print('Rows:',MonkeyDB.listStorage,'\n\n')
+MonkeyDB.data.displayDataOnScreen()
+
+
+# Fill empty values
+print('Filling empty values...')
+MonkeyDB.edit.addColumn('Is Dead?')
+MonkeyDB.mods.EmptyEntryFill('Is Dead?', 'No')
+
 
 # Save database:
 
@@ -264,3 +368,6 @@ MonkeyDB.edit.removeRow(0)
 
 
 
+# data.addColumn() - Needs to create empty values for all rows in the new column
+# mods.EmptyEntryFill() - Needs doesIndexForColumnExist option to be implemented
+# edit.removeRow() - Hasn't been done at all yet.
