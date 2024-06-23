@@ -7,10 +7,17 @@
 # Ideas for settings:
 # max_allowsRows - A db can only have ? rows within it.
 
+# Temp data (Moving to save file when that has been made/developed)
+incrimatationCount='AAAA' 
+'''1 letter, 1 number, 2 letters'''
+
+
 def incrimatationHandler():
     '''The use of instances makes usage of a single variable difficult along with other management issues. This helps with that :)-'''
     # Functions to apply incrimataions to:
     # db_Handler.mkGlobalTempVars()
+    # Work as follows:
+    
     pass
 class db_Handler:
     '''An extremely simple, but yet thought out hanlder. :)-'''
@@ -81,7 +88,14 @@ class db_Handler:
             - To get a index range use: data.row_indexRangeCount()
             - To return the row of an index use: data.row_indexLookup()
             '''
-            pass
+            if type(index) == int:
+                if index < len(self.handler.listStorage):
+                    self.handler.listStorage.pop(index)
+                    return
+                else:
+                    raise Exception('\n\nCall Function: --> db_Handler.Edit.removeRow()\nIndex is out of range.')
+            else:
+                raise Exception('\n\nCall Function: --> db_Handler.Edit.removeRow()\nIndex must be an integer.')
         def addRow(self, row):
             '''Add a new row to the database! Give me a list of data to add. The list cannot be longer or shorter than the column count.'''
             if len(row) == len(self.handler.columnStorage):
@@ -229,7 +243,7 @@ class db_Handler:
                     print(rowsNeat)
             
 
-    # Reused from my old handler. Why change something that works? :)- Did make a few changes to it tho.
+    # Reused from my old handler. Why change something that works? :)- Did make a few changes to it tho. :laugh:
     def space(self, var=None, max_length=10, hide=False, return_ShortenNotice=False, centerText=False):
         var = str(var)
         if isinstance(var, str):
@@ -332,6 +346,7 @@ MonkeyDB.edit.addRow(['Mike', 'No', 'Most Likely', 'Yes', 'Yes', 'No'])
 MonkeyDB.edit.addRow(['Mark', 'Yes', 'Perhaps', 'No', 'Yes', 'No'])
 MonkeyDB.edit.addRow(['Turtle', 'Yes', 'Perhaps', 'No', 'Yes', 'No'])
 MonkeyDB.edit.addRow(['Mike', 'No', 'Most Likely', 'Yes', 'Yes', 'No'])
+MonkeyDB.edit.addRow(['Tacos', 'Turtles', 'Tacos', 'Turtles', 'Tacos', 'Turtles'])
 print('Rows:',MonkeyDB.listStorage,'\n\n')
 
 # Remove column:
@@ -344,8 +359,9 @@ print('Rows:',MonkeyDB.listStorage,'\n\n')
 print('Removing Row:')
 output = MonkeyDB.data.row_indexRangeCount()
 print('row_indexRangeCount return:',output)
-output1 = MonkeyDB.data.findRowWithValues(columns=['Is Human?', 'Is Stupid?'], value=['Perhaps', 'Yes'])
+output1 = MonkeyDB.data.findRowWithValues(columns=['Is Human?', 'Is Stupid?'], value=['Tacos', 'Turtles'])
 print('findRowWithValues return:',output1)
+MonkeyDB.edit.removeRow(0)
 
 MonkeyDB.edit.removeRow(0)
 print('Rows:',MonkeyDB.listStorage,'\n\n')
@@ -357,7 +373,7 @@ print('Filling empty values...')
 MonkeyDB.edit.addColumn('Is Dead?')
 MonkeyDB.mods.EmptyEntryFill('Is Dead?', 'No')
 
-
+print(MonkeyDB.columnStorage)
 # Save database:
 
 
@@ -371,3 +387,4 @@ MonkeyDB.mods.EmptyEntryFill('Is Dead?', 'No')
 # data.addColumn() - Needs to create empty values for all rows in the new column
 # mods.EmptyEntryFill() - Needs doesIndexForColumnExist option to be implemented
 # edit.removeRow() - Hasn't been done at all yet.
+# edit.addRow() - Needs to verify the input list is less than or equal to the column count. If less than, fill empty values with None. If more than, raise an error.
