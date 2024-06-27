@@ -6,30 +6,82 @@
 
 # Ideas for settings:
 # max_allowsRows - A db can only have ? rows within it.
+# CaseSensativityAmoungColumnNames=True
+
+#Grouped Files
+# 1) handler_showcase.py
+# 2) SaveHeader.txt
+
+
+# -------------------------------------------------------------- #
+#                                                                #
+#                   Created by Brandon R.                        #
+#               Supported and backed by Dakota H.                #
+#                                                                #
+# -------------------------------------------------------------- #
+import os, sys, shutil
+print('Current Path Set:', os.getcwd())
+os.chdir('App')
+print('Current Version: Testing Only!')
+
+
+
 
 # Temp data (Moving to save file when that has been made/developed)
 incrimatationCount='AAAA' 
-'''1 letter, 1 number, 2 letters'''
+'''1 letter, then 3 numbers or letters.'''
+usedCountList = []
 
+# Temp data (Moving to save file when that has been made/developed)
+def generateNextIncrement():
+    global incrimatationCount
+    # Check to see if current Count has been used yet.
+    if incrimatationCount in usedCountList:
+        usedCountList.append(incrimatationCount)
+        return incrimatationCount
+    else:
+        chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+        chars_with_numbers = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+        tS = len(chars_with_numbers)  # totalSize of letter list(s) each, -1 if index
 
-def incrimatationHandler():
-    '''The use of instances makes usage of a single variable difficult along with other management issues. This helps with that :)-'''
-    # Functions to apply incrimataions to:
-    # db_Handler.mkGlobalTempVars()
-    # Work as follows:
+        # Convert the incrimatationCount to a list for easier manipulation
+        incrimatationList = list(incrimatationCount)
+
+        for i in range(len(incrimatationList) - 1, -1, -1):
+            # If the current character is not the last one in chars
+            if i == 0:
+                current_chars = chars
+            else:
+                current_chars = chars_with_numbers
+
+            if incrimatationList[i] != current_chars[-1]:
+                # Find the index of the current character in chars and increment it
+                nextIndex = current_chars.index(incrimatationList[i]) + 1
+                incrimatationList[i] = current_chars[nextIndex]
+                break
+            else:
+                # If the current character is the last one in chars, reset it to the first character
+                incrimatationList[i] = current_chars[0]
+
+        # Convert the list back to a string
+        incrimatationCount = ''.join(incrimatationList)
+        usedCountList.append(incrimatationCount)
+        return incrimatationCount
     
-    pass
+
 class db_Handler:
     '''An extremely simple, but yet thought out hanlder. :)-'''
     def __init__(self) -> None:
         # Active Status, 
         self.info = [True]
         # Global Temp Var Identifier
-        self.tag = [1]
+        self.tag = [generateNextIncrement()] # Makes self tag unique for each database, temp vars don't colide this way.
         # Data
         self.columnStorage = []
         # List Storage
         self.listStorage = []
+        # Owner of the database
+        self.owner = None
 
         # Initialize self amoung classes
         self.edit = self.Edit(self)
@@ -48,22 +100,30 @@ class db_Handler:
         globals()[newVar] = None
     def create(self):
         self.mkGlobalTempVars()
+    
     class Edit:
         def __init__(self, handler):
             self.handler = handler
-        def addColumn(self, column, value=None):
+        
+        def addColumn(self, column, value=None, AutoFillEmptyRows=True):
             '''Add a new column to the database!
             
             Args:
             - Column(str): The name of the column
             - Value(str/None): The value to fill the empty rows with for the new column. (Default is None)
+
+            Settings:
+            - AutoFillEmptyRows: True/False
             
             Notes:
             All rows for this column will be empty. Use mods.EmptyEntryFill() to fill empty values in rows.'''
             if type(column) == str:
                 self.handler.columnStorage.append(column)
+                if AutoFillEmptyRows:
+                    self.handler.mods.EmptyEntryFill(column=column, value=value, doesIndexForColumnExist=True)
             else:
-                raise Exception('\n\nCall Function: --> db_Handler.Edit.addColumn()\nColumn must be a string. Please and thank you.')
+                raise Exception('\n\nCall Function: --> db_Handler.Edit.addColumn()\n - Column must be a string.')
+        
         def removeColumn(self, column):
             '''Removes a column from the database!
             
@@ -83,6 +143,7 @@ class db_Handler:
                 raise Exception('\n\nCall Function: --> db_Handler.edit.removeColumn()\nAn unknown error happened :(')
             else:
                 raise Exception('\n\nCall Function: --> db_Handler.edit.removeColumn()\nColumn must be a string. Please and thank you.')
+        
         def removeRow(self, index):
             '''Remove a row from the database! Give me the index of the row to remove. The index starts from 0.
             - To get a index range use: data.row_indexRangeCount()
@@ -96,6 +157,7 @@ class db_Handler:
                     raise Exception('\n\nCall Function: --> db_Handler.Edit.removeRow()\nIndex is out of range.')
             else:
                 raise Exception('\n\nCall Function: --> db_Handler.Edit.removeRow()\nIndex must be an integer.')
+        
         def addRow(self, row):
             '''Add a new row to the database! Give me a list of data to add. The list cannot be longer or shorter than the column count.'''
             if len(row) == len(self.handler.columnStorage):
@@ -107,10 +169,12 @@ class db_Handler:
                 raise Exception('\n\nCall Function: --> db_Handler.Edit.addRow()\nAn unknown error happened :(')
             else:
                 raise Exception('\n\nCall Function: --> db_Handler.Edit.addRow()\nRow length must be the same as the column length.')
+    
     class Mods:
         '''Things I personally would love to have built into a handler. But done simply! None of that complicated shit.'''
         def __init__(self, handler):
             self.handler = handler
+        
         def RemoveEmptyColumnData(self, column=None, innerFunction=False):
             '''Want to remove all the data from rows with a column that has been deleted? Well just use me! This function is used within edit.removeColumn() already. But if you manually remove a column within the data files i'm here to help.
             
@@ -134,24 +198,38 @@ class db_Handler:
                 return
             else:
                 raise Exception('\n\nCall Function: --> db_Handler.mods.RemoveEmptyColumnData()\nColumn must be either int or str.')
-        def EmptyEntryFill(self, column, value, NoListValue=['', None], doesIndexForColumnExist=True):
+        
+        def EmptyEntryFill(self, column, value, NoListValue=['', None], doesIndexForColumnExist=False):
             '''Used after creating a new column to fill all rows with no value to have a value.
             \n
             \nArgs:
             \n- column: The column to fill empty values with
             \n- value: The value to fill the empty values with
             \n- NoListValue: The values to consider as empty. Default is ['', None]
-            \n- doesIndexForColumnExist: Does the column have an index created for each row?
+            \n\n- doesIndexForColumnExist: Does the column have an index created for each row? Default is False.
             \n    Ex: This example doesn't have an index for each row yet. So it would be False.
             \n    Name | Age | New Column
             \n    Mike | 23  | 
             \n    Mark | 24  |'''
+            # Make local variables, for faster sequantial access
             rows = self.handler.listStorage
             columns = self.handler.columnStorage.index(column) # Gets index of specified column
+            # Loop through rows
             for i in range(len(rows)):
-                for emptyValue in NoListValue:
-                    if rows[i][columns] == emptyValue:
-                        rows[i][columns] = value
+                # Loop through columns
+                for emptyValue in NoListValue: 
+                    try:
+                        if rows[i][columns] == emptyValue:
+                            rows[i][columns] = value
+                    except:
+                        if doesIndexForColumnExist:
+                            # If no actual index exists for the column, create it with the value of (value)-var
+                            rows[i].append(value) # Add value to row
+                        else:
+                            raise Exception('\n\nCall Function: --> db_Handler.mods.EmptyEntryFill()\n - Index for column does not exist. Retry with doesIndexForColumnExist=True.')
+            # Update listStorage
+            self.handler.listStorage = rows
+                    
     class Data:
         def __init__(self, handler):
             self.handler = handler
@@ -242,7 +320,6 @@ class db_Handler:
                 else:
                     print(rowsNeat)
             
-
     # Reused from my old handler. Why change something that works? :)- Did make a few changes to it tho. :laugh:
     def space(self, var=None, max_length=10, hide=False, return_ShortenNotice=False, centerText=False):
         var = str(var)
@@ -279,13 +356,71 @@ class db_Handler:
                     return var
         else:
             if hide == False: print('Error: Input is not string.')
+    
+    class Backup:
+        '''Saving the database, creates a backup each time. The backup is saved in a folder called "Backups". This class is used to manage the backups.'''
+        def __init__(self, handler):
+            self.handler = handler
+        
+        def createBackupFolder(self):
+            '''Creates a folder to store backups.'''
+            os.mkdir('db_'+str(self.handler.tag[0])+'_Backups')
+        
+        def clearBackups(self):
+            '''Clears all backups for the database.'''
+            pass
+        
+        def compressBackups(self):
+            '''Compresses all backups for the database into a zip file.'''
+            pass
+
     class Save:
         def __init__(self, handler):
             self.handler = handler
-        '''Saves the entire db instance'''
-        # You can save a database even if it's empty. Allows for an easy setup of hundreds of databases.
-        # Vars saved: tag, columnStorage, listStorage
-        pass
+
+        def all(self):
+            '''Saves the entire db instance. This includes all data, columns, and meta data.'''
+            # You can save a database even if it's empty. Allows for an easy setup of hundreds of databases.
+            # Vars saved: tag, columnStorage, listStorage, incrementCount, usedCountList
+
+            # Make the name for our save file
+            saveNm='db_'+str(self.handler.tag[0])+'.txt'
+
+            # Check if file exists
+            if os.path.exists('db_'+str(self.handler.tag[0])+'.txt'):
+                # Check if folder exists
+                if not os.path.exists('Backups'):
+                    os.mkdir('db_'+str(self.handler.tag[0])+'_Backups')
+
+                # If so, copy file to backups folder
+
+                backup_folder = 'db_' + str(self.handler.tag[0]) + '_Backups'
+                if not os.path.exists(backup_folder):
+                    os.mkdir(backup_folder)
+                backup_files = os.listdir(backup_folder)
+                num_files = len(backup_files)
+                # Make the name for our backup file
+                saveNmBk = 'db_'+str(num_files)+'_'+str(self.handler.tag[0])+'.txt'
+                os.rename(saveNm, saveNmBk)
+                backup_file = os.path.join(backup_folder, saveNmBk)
+                shutil.copyfile(saveNmBk, backup_file)
+
+                # Then, Delete the save file
+                os.remove(saveNmBk)
+
+
+            # Now, we save the database.
+            with open(saveNm, 'w') as f:
+                f.write('tag = '+str(self.handler.tag[0])+'\n')
+                f.write('columnStorage = '+str(self.handler.columnStorage)+'\n')
+                f.write('listStorage = '+str(self.handler.listStorage)+'\n')
+                f.write('incrementCount = '+str(incrimatationCount)+'\n')
+                f.write('usedCountList = '+str(usedCountList)+'\n')
+                f.close()
+
+            # All done!
+            print('Database saved as:', saveNm)
+
     def load(self):
         '''Loads data from a saved database. Requires this database instance to be empty.'''
         if self.handler.columnStorage != [] or self.handler.listStorage != []:
@@ -297,7 +432,7 @@ class db_Handler:
         def __init__(self, handler):
             self.handler = handler
 
-        '''Add of Modify meta data of the database.'''
+        '''Add or Modify meta data of a database.'''
         def status(self, newStatus=None):
             '''Change the status of the database. Doesn\'t disable the handler. Used as a marker.
             Args:
@@ -355,6 +490,10 @@ MonkeyDB.edit.removeColumn('Names')
 print('Columns:',MonkeyDB.data.columns())
 print('Rows:',MonkeyDB.listStorage,'\n\n')
 
+# Add column with no value:
+print('Adding column with no value...')
+MonkeyDB.edit.addColumn('Trash')
+
 # Remove row:
 print('Removing Row:')
 output = MonkeyDB.data.row_indexRangeCount()
@@ -375,7 +514,7 @@ MonkeyDB.mods.EmptyEntryFill('Is Dead?', 'No')
 
 print(MonkeyDB.columnStorage)
 # Save database:
-
+MonkeyDB.save.all()
 
 # Load database:
 
@@ -385,6 +524,19 @@ print(MonkeyDB.columnStorage)
 
 
 # data.addColumn() - Needs to create empty values for all rows in the new column
-# mods.EmptyEntryFill() - Needs doesIndexForColumnExist option to be implemented
 # edit.removeRow() - Hasn't been done at all yet.
 # edit.addRow() - Needs to verify the input list is less than or equal to the column count. If less than, fill empty values with None. If more than, raise an error.
+# incrimatationHandler() - Needs to be designed. Will be used for creating temp vars for each database.
+
+
+
+# Updates June/24/2024:
+# 1)
+# - mods.EmptyEntryFill()
+    # Implemented doesIndexForColumnExist option. 
+    # Usage: mods.EmptyEntryFill(column='Am I A Turtle?', value='No', doesIndexForColumnExist=True)
+# 2)
+# - generateNextIncrement()
+    # Implemented a function to generate the next increment for the database usage.
+    # For creating temp vars, that do not colide with other databases temp vars.
+    # Usage: db_Handler.mkGlobalTempVars()
