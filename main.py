@@ -83,12 +83,13 @@ class db_Handler:
         # Owner of the database
         self.owner = None
 
-        # Initialize self amoung classes
+        # Initialize self amoung classes, and classify user functions
         self.edit = self.Edit(self)
         self.data = self.Data(self)
         self.meta = self.Meta(self)
         self.save = self.Save(self)
         self.mods = self.Mods(self)
+        self.randomMath = self.RandonMath(self)
     def assignTemp(self, value):
         var = ('TempVar'+str(self.tag))
         globals()[var] = value
@@ -356,7 +357,24 @@ class db_Handler:
                     return var
         else:
             if hide == False: print('Error: Input is not string.')
-    
+    class RandonMath:
+        def __init__(self, handler):
+            self.handler = handler
+        def tireRotationsMpH(speed_mph = 400,
+            tire_diameter_inches = 25.5,
+            feet_per_mile = 5280,
+            minutes_per_hour = 60):
+            '''Calculate tire rotations per minute based on tire diameter and speed in miles per hour. Used to calculate RPM required from an electric motor to achieve a certain speed.'''
+            import math
+
+            # Calculations
+            circumference_inches = math.pi * tire_diameter_inches
+            circumference_feet = circumference_inches / 12  # Convert inches to feet
+            speed_feet_per_minute = speed_mph * feet_per_mile / minutes_per_hour
+            rpm = speed_feet_per_minute / circumference_feet
+
+            print(f'A tire with a diameter of {tire_diameter_inches} inches will rotate {rpm:.2f} times per minute; or be the rpm motor requirements for an illegal moped, to travel at a speed of {speed_mph} mph.')
+
     class Backup:
         '''Saving the database, creates a backup each time. The backup is saved in a folder called "Backups". This class is used to manage the backups.'''
         def __init__(self, handler):
@@ -518,6 +536,9 @@ MonkeyDB.save.all()
 
 # Load database:
 
+
+# Random Math:
+MonkeyDB.RandonMath.tireRotationsMpH()
 
 
 
