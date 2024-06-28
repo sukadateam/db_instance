@@ -357,6 +357,7 @@ class db_Handler:
                     return var
         else:
             if hide == False: print('Error: Input is not string.')
+    
     class RandonMath:
         def __init__(self, handler):
             self.handler = handler
@@ -444,8 +445,38 @@ class db_Handler:
         if self.handler.columnStorage != [] or self.handler.listStorage != []:
             raise Exception('\n\nCall Function: --> db_Handler.load()\nData already exists in this database. Cannot load data into an existing database.')
         else:
-            # Load data
-            pass
+            # Check if columnStorage and listStorage are empty
+            if self.handler.columnStorage == [] and self.handler.listStorage == []:
+                # Make the name for our save file
+                saveNm='db_'+str(self.handler.tag[0])+'.txt'
+                # Check if file exists
+                if os.path.exists(saveNm):
+                    # Load the database
+                    with open(saveNm, 'r') as f:
+                        for line in f:
+                            # Get the value of the line
+                            value = line.split(' = ')[1]
+                            # Remove the '\n' at the end
+                            value = value.replace('\n', '')
+                            # Get the name of the line
+                            name = line.split(' = ')[0]
+                            # Remove the spaces at the end
+                            name = name.replace(' ', '')
+                            # Set the value to the database
+                            if name == 'tag':
+                                self.handler.tag[0] = value
+                            if name == 'columnStorage':
+                                self.handler.columnStorage = eval(value)
+                            if name == 'listStorage':
+                                self.handler.listStorage = eval(value)
+                            if name == 'incrementCount':
+                                incrimatationCount = value
+                            if name == 'usedCountList':
+                                usedCountList = eval(value)
+                    print('Database loaded:', saveNm)
+                else:
+                    raise Exception('\n\nCall Function: --> db_Handler.load()\nDatabase save file does not exist.')
+            
     class Meta:
         def __init__(self, handler):
             self.handler = handler
@@ -531,6 +562,8 @@ MonkeyDB.edit.addColumn('Is Dead?')
 MonkeyDB.mods.EmptyEntryFill('Is Dead?', 'No')
 
 print(MonkeyDB.columnStorage)
+TurtleDB = MonkeyDB()
+TurtleDB.load()
 # Save database:
 MonkeyDB.save.all()
 
