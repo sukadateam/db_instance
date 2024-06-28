@@ -34,12 +34,14 @@ usedCountList = []
 
 # Temp data (Moving to save file when that has been made/developed)
 def generateNextIncrement():
-    global incrimatationCount
+    global incrimatationCount, usedCountList
     # Check to see if current Count has been used yet.
-    if incrimatationCount in usedCountList:
+
+    if incrimatationCount not in usedCountList:
         usedCountList.append(incrimatationCount)
         return incrimatationCount
     else:
+        print('Gen new tag')
         chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
         chars_with_numbers = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
         tS = len(chars_with_numbers)  # totalSize of letter list(s) each, -1 if index
@@ -76,6 +78,7 @@ class db_Handler:
         self.info = [True]
         # Global Temp Var Identifier
         self.tag = [generateNextIncrement()] # Makes self tag unique for each database, temp vars don't colide this way.
+        
         # Data
         self.columnStorage = []
         # List Storage
@@ -442,13 +445,13 @@ class db_Handler:
 
     def load(self):
         '''Loads data from a saved database. Requires this database instance to be empty.'''
-        if self.handler.columnStorage != [] or self.handler.listStorage != []:
+        if self.columnStorage != [] or self.listStorage != []:
             raise Exception('\n\nCall Function: --> db_Handler.load()\nData already exists in this database. Cannot load data into an existing database.')
         else:
             # Check if columnStorage and listStorage are empty
-            if self.handler.columnStorage == [] and self.handler.listStorage == []:
+            if self.columnStorage == [] and self.listStorage == []:
                 # Make the name for our save file
-                saveNm='db_'+str(self.handler.tag[0])+'.txt'
+                saveNm='db_'+str(self.tag[0])+'.txt'
                 # Check if file exists
                 if os.path.exists(saveNm):
                     # Load the database
@@ -464,11 +467,11 @@ class db_Handler:
                             name = name.replace(' ', '')
                             # Set the value to the database
                             if name == 'tag':
-                                self.handler.tag[0] = value
+                                self.tag[0] = value
                             if name == 'columnStorage':
-                                self.handler.columnStorage = eval(value)
+                                self.columnStorage = eval(value)
                             if name == 'listStorage':
-                                self.handler.listStorage = eval(value)
+                                self.listStorage = eval(value)
                             if name == 'incrementCount':
                                 incrimatationCount = value
                             if name == 'usedCountList':
@@ -561,11 +564,7 @@ print('Filling empty values...')
 MonkeyDB.edit.addColumn('Is Dead?')
 MonkeyDB.mods.EmptyEntryFill('Is Dead?', 'No')
 
-print(MonkeyDB.columnStorage)
-TurtleDB = MonkeyDB()
-TurtleDB.load()
 # Save database:
-MonkeyDB.save.all()
 
 # Load database:
 
