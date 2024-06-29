@@ -127,6 +127,28 @@ class db_Handler:
 
     class Encryption:
         def en(input, uniqueID, r=False, acc4decrywithIOverflow=False, debug=False, InvertedCount=False, maxLength=9, decrypt=False):
+            '''Using an inputed string and unique number, we can scatter the actual input
+            
+            Args:
+            - input(str): Input to be encrypted
+            - uniqueID: Random Numbers, but any indiviual number cannot be greater than the length of input -1
+            -     - Ex: input = 'Password', thus making it 8 chars longs. So we can not use any number greater than 7.
+                  - The length of uniqueID can be any length, but the numbers within it cannot be greater than the length of input -1
+                        This is due to a limitation of the method used to encrypt the data.
+            - r: Reverse the position of placed chars: True/False
+            - acc4decrywithIOverflow or Account for decrypt with (I) overflow, if input is gone through more than once.
+                    Or if len(input) is less than < len(str(uniqueID)). Used for decryption only.
+            - InvertedCount: Normal I Usage: 0.1.2.3.0... Inverted 3.2.1.0.3...
+            - maxLength: How long each bit can be. Max 10, Min 2.
+            - decrypt: If the Input, has already been encrypted, and you want to decrypt it. Set to True.
+                    
+            Use Example:
+            - encrypting: en('Hello', 1234)
+            - decrypting: en('Hello', 1234, decrypt=True)
+            All other settings are optional and are designed for more advanced usage.
+            
+            Returns:
+            - Encrypted output'''
             splitInput = [input[i:i+maxLength] for i in range(0, len(input), maxLength)]
             output = ''
             for chunk in splitInput:
@@ -141,10 +163,17 @@ class db_Handler:
                     if i < len(uniqueIDStr):
                         swapIndex = int(uniqueIDStr[i]) % len(tmpList)
                         swapOperations.append((i, swapIndex))
+                
+                # If decrypt is True, reverse the swap operations
                 if decrypt:
                     swapOperations.reverse()
+                
+                # Index Swapping
                 for i, swapIndex in swapOperations:
-                    tmpList[i], tmpList[swapIndex] = tmpList[swapIndex], tmpList[i]
+                    if r:
+                        tmpList[i], tmpList[swapIndex] = tmpList[i], tmpList[swapIndex]
+                    else:
+                        tmpList[i], tmpList[swapIndex] = tmpList[swapIndex], tmpList[i]
                     if debug:
                         print(f'Swapping {tmpList[i]} with {tmpList[swapIndex]} at indices {i} and {swapIndex}')
                 output += ''.join(tmpList)
@@ -582,6 +611,3 @@ class db_Handler:
 # |      With the intent of easy use, and easy to understand.     |
 # |                 Also to just look nice. :)                    |
 # -----------------------------------------------------------------
-
-
-
