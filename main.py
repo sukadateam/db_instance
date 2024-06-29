@@ -30,7 +30,9 @@ print('Current Version: Testing Only!')
 # Temp data (Moving to save file when that has been made/developed)
 incrimatationCount='AAAA' 
 '''1 letter, then 3 numbers or letters.'''
+# Variabled save file additions
 usedCountList = []
+lastDatabaseSaved = None
 
 # Temp data (Moving to save file when that has been made/developed)
 def generateNextIncrement():
@@ -85,6 +87,11 @@ class db_Handler:
         self.listStorage = []
         # Owner of the database
         self.owner = None
+        
+        # User data
+        self.userNames = []
+        self.userPw = []
+        self.userID = []
 
         # Initialize self amoung classes, and classify user functions
         self.edit = self.Edit(self)
@@ -92,6 +99,7 @@ class db_Handler:
         self.meta = self.Meta(self)
         self.save = self.Save(self)
         self.mods = self.Mods(self)
+        self.users = self.Users(self)
         self.randomMath = self.RandonMath(self)
     def assignTemp(self, value):
         var = ('TempVar'+str(self.tag))
@@ -105,6 +113,43 @@ class db_Handler:
     def create(self):
         self.mkGlobalTempVars()
     
+    class Users:
+        def __init__(self, handler):
+            self.handler = handler
+        def create(self, name, passw, id):
+            '''Create a user
+            
+            Args:
+            name: Username
+            passw: Password
+            id: Refference ID'''
+            pass
+
+    class Encryption:
+        def en(input, uniqueID, r=False, acc4decrywithIOverflow=False, debug=False, InvertedCount=False, maxLength=9, decrypt=False):
+            splitInput = [input[i:i+maxLength] for i in range(0, len(input), maxLength)]
+            output = ''
+            for chunk in splitInput:
+                tmpList = list(chunk)
+                uniqueIDStr = str(uniqueID)
+                if InvertedCount:
+                    uniqueIDStr = uniqueIDStr[::-1]
+                swapOperations = []
+                for i, char in enumerate(tmpList):
+                    if acc4decrywithIOverflow:
+                        i = i % len(uniqueIDStr)
+                    if i < len(uniqueIDStr):
+                        swapIndex = int(uniqueIDStr[i]) % len(tmpList)
+                        swapOperations.append((i, swapIndex))
+                if decrypt:
+                    swapOperations.reverse()
+                for i, swapIndex in swapOperations:
+                    tmpList[i], tmpList[swapIndex] = tmpList[swapIndex], tmpList[i]
+                    if debug:
+                        print(f'Swapping {tmpList[i]} with {tmpList[swapIndex]} at indices {i} and {swapIndex}')
+                output += ''.join(tmpList)
+            return output
+
     class Edit:
         def __init__(self, handler):
             self.handler = handler
@@ -402,6 +447,7 @@ class db_Handler:
 
         def all(self):
             '''Saves the entire db instance. This includes all data, columns, and meta data.'''
+            global lastDatabaseSaved
             # You can save a database even if it's empty. Allows for an easy setup of hundreds of databases.
             # Vars saved: tag, columnStorage, listStorage, incrementCount, usedCountList
 
@@ -413,9 +459,6 @@ class db_Handler:
                 # Check if folder exists
                 if not os.path.exists('Backups'):
                     os.mkdir('db_'+str(self.handler.tag[0])+'_Backups')
-
-                # If so, copy file to backups folder
-
                 backup_folder = 'db_' + str(self.handler.tag[0]) + '_Backups'
                 if not os.path.exists(backup_folder):
                     os.mkdir(backup_folder)
@@ -430,21 +473,57 @@ class db_Handler:
                 # Then, Delete the save file
                 os.remove(saveNmBk)
 
-
             # Now, we save the database.
             with open(saveNm, 'w') as f:
                 f.write('tag = '+str(self.handler.tag[0])+'\n')
                 f.write('columnStorage = '+str(self.handler.columnStorage)+'\n')
                 f.write('listStorage = '+str(self.handler.listStorage)+'\n')
-                f.write('incrementCount = '+str(incrimatationCount)+'\n')
-                f.write('usedCountList = '+str(usedCountList)+'\n')
                 f.close()
 
             # All done!
+            lastDatabaseSaved = saveNm
             print('Database saved as:', saveNm)
 
-    def load(self):
-        '''Loads data from a saved database. Requires this database instance to be empty.'''
+        def VariabledSave(self):
+            '''Used periodically to save important variables for stable runtime of handler.'''
+            global usedCountList, lastDatabaseSaved
+            # Check if file exists, set as backup
+            if os.path.exists('variableSave.py'):
+                os.rename('variableSave.py', 'variableSaveBackup.py')
+
+            # Overwrite file, or open new one and write data
+            file = open('variableSave.py', 'w+')
+            file.write('usedCountList = {}'.format(usedCountList))
+            file.write('\nlastDatabaseSaved = {}'.format(lastDatabaseSaved))
+            file.close()
+
+    def load(self, tag=None, excuse=[]):
+        '''Loads data from a saved database. Requires this database instance to be empty.
+        
+        Args:
+        tag: The tag of the database to load. If None, it will load last saved database.
+        excuse: A list of variables to excuse from being loaded. Empty = Load all.
+        
+        Excusable Variables:
+        - columnStorage
+        - listStorage
+        - tag (Only call if you know what your doing)'''
+
+        # Check excusable variables
+        allowedExcuses = ['columnStorage', 'listStorage', 'tag']
+        for i in range(len(excuse)):
+            if excuse[i] not in allowedExcuses:
+                raise Exception('\n\nCall Function: --> db_Handler.load()\nInvalid excuse given. Excuse must be in the list of allowed excuses.')
+        
+        if tag != None:
+            # Set the tag to the one given
+            self.tag[0] = tag
+        elif tag == None and lastDatabaseSaved != None:
+            # Set the tag to the last saved database
+            self.tag[0] = lastDatabaseSaved
+        else:
+            raise Exception('\n\nCall Function: --> db_Handler.load()\nNo tag given, and no database has been saved yet. Unable to automatically determine what to load.')
+        
         if self.columnStorage != [] or self.listStorage != []:
             raise Exception('\n\nCall Function: --> db_Handler.load()\nData already exists in this database. Cannot load data into an existing database.')
         else:
@@ -466,16 +545,18 @@ class db_Handler:
                             # Remove the spaces at the end
                             name = name.replace(' ', '')
                             # Set the value to the database
-                            if name == 'tag':
-                                self.tag[0] = value
-                            if name == 'columnStorage':
-                                self.columnStorage = eval(value)
-                            if name == 'listStorage':
-                                self.listStorage = eval(value)
-                            if name == 'incrementCount':
-                                incrimatationCount = value
-                            if name == 'usedCountList':
-                                usedCountList = eval(value)
+
+                            # Verify excuses before setting values
+                            if 'tag' not in allowedExcuses:
+                                if name == 'tag':
+                                    self.tag[0] = value
+                            if 'columnStorage' not in allowedExcuses:
+                                if name == 'columnStorage':
+                                    self.columnStorage = eval(value)
+                            if 'listStorage' not in allowedExcuses:
+                                if name == 'listStorage':
+                                    self.listStorage = eval(value)
+
                     print('Database loaded:', saveNm)
                 else:
                     raise Exception('\n\nCall Function: --> db_Handler.load()\nDatabase save file does not exist.')
@@ -503,93 +584,4 @@ class db_Handler:
 # -----------------------------------------------------------------
 
 
-# Create database:
-MonkeyDB = db_Handler()
 
-# Change and see status:
-MonkeyDB.meta.status(newStatus=False)
-print('Status',MonkeyDB.data.returnStatus())
-# Add column:
-print('Creating columns...')
-MonkeyDB.edit.addColumn('Names')
-MonkeyDB.edit.addColumn('Is Stupid?')
-MonkeyDB.edit.addColumn('Is Human?')
-MonkeyDB.edit.addColumn('Is Smart?')
-MonkeyDB.edit.addColumn('Is Alive?')
-MonkeyDB.edit.addColumn('Is Dead?')
-print('Columns:',MonkeyDB.data.columns(),'\n\n')
-
-
-# Add row:
-print('Adding rows...')
-MonkeyDB.edit.addRow(['Turtle', 'Yes', 'Perhaps', 'No', 'Yes', 'No'])
-MonkeyDB.edit.addRow(['Mike', 'No', 'Most Likely', 'Yes', 'Yes', 'No'])
-MonkeyDB.edit.addRow(['Mark', 'Yes', 'Perhaps', 'No', 'Yes', 'No'])
-MonkeyDB.edit.addRow(['Turtle', 'Yes', 'Perhaps', 'No', 'Yes', 'No'])
-MonkeyDB.edit.addRow(['Mike', 'No', 'Most Likely', 'Yes', 'Yes', 'No'])
-MonkeyDB.edit.addRow(['Mark', 'Yes', 'Perhaps', 'No', 'Yes', 'No'])
-MonkeyDB.edit.addRow(['Turtle', 'Yes', 'Perhaps', 'No', 'Yes', 'No'])
-MonkeyDB.edit.addRow(['Mike', 'No', 'Most Likely', 'Yes', 'Yes', 'No'])
-MonkeyDB.edit.addRow(['Mark', 'Yes', 'Perhaps', 'No', 'Yes', 'No'])
-MonkeyDB.edit.addRow(['Turtle', 'Yes', 'Perhaps', 'No', 'Yes', 'No'])
-MonkeyDB.edit.addRow(['Mike', 'No', 'Most Likely', 'Yes', 'Yes', 'No'])
-MonkeyDB.edit.addRow(['Tacos', 'Turtles', 'Tacos', 'Turtles', 'Tacos', 'Turtles'])
-print('Rows:',MonkeyDB.listStorage,'\n\n')
-
-# Remove column:
-print('Removing column...')
-MonkeyDB.edit.removeColumn('Names')
-print('Columns:',MonkeyDB.data.columns())
-print('Rows:',MonkeyDB.listStorage,'\n\n')
-
-# Add column with no value:
-print('Adding column with no value...')
-MonkeyDB.edit.addColumn('Trash')
-
-# Remove row:
-print('Removing Row:')
-output = MonkeyDB.data.row_indexRangeCount()
-print('row_indexRangeCount return:',output)
-output1 = MonkeyDB.data.findRowWithValues(columns=['Is Human?', 'Is Stupid?'], value=['Tacos', 'Turtles'])
-print('findRowWithValues return:',output1)
-MonkeyDB.edit.removeRow(0)
-
-MonkeyDB.edit.removeRow(0)
-print('Rows:',MonkeyDB.listStorage,'\n\n')
-MonkeyDB.data.displayDataOnScreen()
-
-
-# Fill empty values
-print('Filling empty values...')
-MonkeyDB.edit.addColumn('Is Dead?')
-MonkeyDB.mods.EmptyEntryFill('Is Dead?', 'No')
-
-# Save database:
-
-# Load database:
-
-
-# Random Math:
-MonkeyDB.RandonMath.tireRotationsMpH()
-
-
-
-
-
-# data.addColumn() - Needs to create empty values for all rows in the new column
-# edit.removeRow() - Hasn't been done at all yet.
-# edit.addRow() - Needs to verify the input list is less than or equal to the column count. If less than, fill empty values with None. If more than, raise an error.
-# incrimatationHandler() - Needs to be designed. Will be used for creating temp vars for each database.
-
-
-
-# Updates June/24/2024:
-# 1)
-# - mods.EmptyEntryFill()
-    # Implemented doesIndexForColumnExist option. 
-    # Usage: mods.EmptyEntryFill(column='Am I A Turtle?', value='No', doesIndexForColumnExist=True)
-# 2)
-# - generateNextIncrement()
-    # Implemented a function to generate the next increment for the database usage.
-    # For creating temp vars, that do not colide with other databases temp vars.
-    # Usage: db_Handler.mkGlobalTempVars()
