@@ -763,11 +763,12 @@ class db_Handler:
                 os.remove(saveNmBk)
 
             # Now, we save the database.
+            svList = ['tag', 'columnStorage', 'listStorage', 'owner', 'knownUsers', 'permissions', 'userLogged', 'allowedPermissions', 'userPW']
             with open(saveNm, 'w') as f:
-                f.write('tag = '+str(self.handler.tag[0])+'\n')
-                f.write('columnStorage = '+str(self.handler.columnStorage)+'\n')
-                f.write('listStorage = '+str(self.handler.listStorage)+'\n')
-                f.write()
+                for item in svList:
+                    actual_value = getattr(self.handler, item)
+                    f.write(item + ' = ' + str(actual_value)+'\n')
+                f.write('')
                 f.close()
 
             # All done!
@@ -801,7 +802,7 @@ class db_Handler:
         - tag (Only call if you know what your doing)'''
 
         # Check excusable variables
-        allowedExcuses = ['columnStorage', 'listStorage', 'tag']
+        allowedExcuses = ['columnStorage', 'listStorage', 'tag', 'owner', 'knownUsers', 'permissions', 'userLogged', 'allowedPermissions', 'userPW']
         for i in range(len(excuse)):
             if excuse[i] not in allowedExcuses:
                 raise Exception('\n\nCall Function: --> db_Handler.load()\nInvalid excuse given. Excuse must be in the list of allowed excuses.')
@@ -838,15 +839,33 @@ class db_Handler:
                             # Set the value to the database
 
                             # Verify excuses before setting values
-                            if 'tag' not in allowedExcuses:
+                            if 'tag' not in excuse:
                                 if name == 'tag':
                                     self.tag[0] = value
-                            if 'columnStorage' not in allowedExcuses:
+                            if 'columnStorage' not in excuse:
                                 if name == 'columnStorage':
                                     self.columnStorage = eval(value)
-                            if 'listStorage' not in allowedExcuses:
+                            if 'listStorage' not in excuse:
                                 if name == 'listStorage':
                                     self.listStorage = eval(value)
+                            if 'owner' not in excuse:
+                                if name == 'owner':
+                                    self.owner = eval(value)
+                            if 'knownUsers' not in excuse:
+                                if name == 'knownUsers':
+                                    self.knownUsers = eval(value)
+                            if 'permissions' not in excuse:
+                                if name == 'permissions':
+                                    self.permissions = eval(value)
+                            if 'userLogged' not in excuse:
+                                if name == 'userLogged':
+                                    self.userLogged = eval(value)
+                            if 'allowedPermissions' not in excuse:
+                                if name == 'allowedPermissions':
+                                    self.allowedPermissions = eval(value)
+                            if 'userPW' not in excuse:
+                                if name == 'userPW':
+                                    self.userPW = eval(value)
 
                     print('Database loaded:', saveNm)
                 else:
