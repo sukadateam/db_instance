@@ -20,7 +20,7 @@
 #               Supported and backed by Dakota H.                #
 #                                                                #
 # -------------------------------------------------------------- #
-import os, sys, shutil, random, time, hashlib
+import os, sys, shutil, random, time, hashlib, builtins
 sys.set_int_max_str_digits(1000000)
 print('Current Path Set:', os.getcwd())
 os.chdir('App')
@@ -117,35 +117,49 @@ class db_Handler:
         self.mkGlobalTempVars()
     
     class Users:
+        '''User management class. This class is used to manage users within the database.
+        \n - Allows you to do the following:
+        \n - disable/enable users
+        \n - Create/Remove users
+        \n - Enable/Disable writing of particular columns in the database
+        '''
         def __init__(self, handler):
             self.handler = handler
+        
         def create(self, name, passw, id):
-            '''Create a user
+            '''Create a user. Requires admin permissions to create a user, unless no users exist. After the first user is created, only the admins can modify users.
             
             Args:
-            name: Username
-            passw: Password
-            id: Refference ID'''
+            - name: Username
+            - passw: Password
+            - id: Refference ID'''
+            # Will use db_Handler to store user data
+            # Encryption will be managed by db_Handler.Encryption.en()
+            # 
+            pass
+
+        def remove(self, name):
+            '''Remove a user'''
             pass
 
     class Encryption:
         def __init__(self, handler):
             self.hanlder = handler
 
-        def uniqueIDGen(self, inputLength, maxKeyLength=50, luckyNumber=None, experimentalCharPassword=None, consistantOutput=False):
+        def uniqueIDGen(self, inputLength=5, maxKeyLength=50, luckyNumber=None, password=None, consistantOutput=False):
             '''Creates a random Key for encryption. The longer the key, the stronger the encryption. 
             \n The design behind this generator is to create a key that is random, but also a nuicance to decrypt.
             \n
             \nArgs:
-            \n- inputLength(int): The length of the input, used in deciding the key
+            \n- inputLength(int): The length of the input, used in deciding the key (Not Necessary at this point in time.)
             \n-  -  Ensure count starts from 0, as it's indexes are needed for indices.
             \n-  -  Ex: If Input is 'Password', then the Length is 7. Not 8. If we start from 0.
             \n- maxKeyLength(int): How long the random key is allowed to be. 
             \n-  -  The key generated will be a random length from maxKeyLength/2 to max_Key_length
             \n-  -  Max for this var is: 10,000.
-            \n- luckyNumber(int): A number you think is lucky. Some random number. Similar to experimentalCharPassword, but only numbers.
-            \n- experimentalCharPassword(str): In progress.. Using a character password, a unique number is created and used in place of luckyNumber. The number is unique to character location whithin a string, what character is where, etc...
-            \n- consistantOutput(bool): Disables the randomization used by time.time(), creating a consisting output
+            \n- luckyNumber(int): A number you think is lucky. Some random number. Similar to password, but only numbers.
+            \n- password(str): In progress.. Using a character password, a unique number is created and used in place of luckyNumber. The number is unique to character location whithin a string, what character is where, etc...
+            \n- consistantOutput(bool): Disables the uniqueness used by time.time(), creating a consisting output
 
             \n
             \n Use Example:
@@ -157,7 +171,7 @@ class db_Handler:
             \n1) No 2 chars next to eachother will be the same.
             '''
             # Check arguments:
-            if luckyNumber == None and experimentalCharPassword == None:
+            if luckyNumber == None and password == None:
                 luckyNumber = random.randint(1, 50)
             if maxKeyLength > 10000:
                 raise Exception('\n\nCall Function: --> Encryption.uniqueIDGen()\nMax Key Length is too large. Max is 10000')
@@ -167,13 +181,13 @@ class db_Handler:
                 if not isinstance(locals()[item], int):
                     raise Exception(exCall + 'Invalid Argument Type({}), must be int.'.format(str(item)))
 
-            # Validate and process experimentalCharPassword
-            if experimentalCharPassword:
+            # Validate and process password
+            if password:
                 allowed_chars = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # Excluded confusing characters
-                if any(char not in allowed_chars for char in experimentalCharPassword):
-                    raise ValueError("experimentalCharPassword contains invalid characters.")
-                # Use hashing to generate a unique number from experimentalCharPassword
-                hash_object = hashlib.sha256(experimentalCharPassword.encode()) 
+                if any(char not in allowed_chars for char in password):
+                    raise ValueError("password contains invalid characters.")
+                # Use hashing to generate a unique number from password
+                hash_object = hashlib.sha256(password.encode()) 
                 experimental_number = int(hash_object.hexdigest(), 16)
                 random.seed(experimental_number)
                 print('Experimental_number:',experimental_number)
@@ -182,7 +196,10 @@ class db_Handler:
                 random.seed(luckyNumber)
 
             mxSize = random.randint(maxKeyLength // 2, maxKeyLength)
-            random.seed(time.time())
+            if not consistantOutput:
+                random.seed(time.time())
+            else:
+                random.seed(0)
             keyOut = ' '
             for gen in range(mxSize):
                 while True:
@@ -193,18 +210,24 @@ class db_Handler:
                         break
                 keyOut += new_key
                 random.seed(random.randint(0, gen))
-                b1 = int(random.randint(1, int(time.time())))
+                if not consistantOutput:
+                    b1 = int(random.randint(1, int(time.time())))
+                else:
+                    b1 = int(random.randint(0, luckyNumber))
                 b2 = int(random.randint(0, luckyNumber))
                 random.seed((int(b1) + int(b2)))
                 b3 = random.randint(0, 100)
                 b4 = random.randint(0, 3)
-                if b4 == 0:
-                    random.seed(time.time() * b3)
-                elif b4 == 1:
-                    random.seed(time.time() + b3)
-                else:
-                    random.seed(time.time() - b3)
-            return keyOut
+                if not consistantOutput:
+                    if b4 == 0:
+                        random.seed(time.time() * b3)
+                    elif b4 == 1:
+                        random.seed(time.time() + b3)
+                    else:
+                        random.seed(time.time() - b3)
+            
+            return keyOut[0:maxKeyLength-1] # Verify the length of the key is correct
+        
         def en(self, input, uniqueID, r=False, acc4decrywithIOverflow=False, debug=False, InvertedCount=False, maxLength=9, decrypt=False):
             '''Using an inputed string and unique number, we can scatter the actual input
             
@@ -229,6 +252,10 @@ class db_Handler:
             Returns:
             - Encrypted output
             '''
+            try:
+                uniqueID = int(uniqueID)
+            except:
+                raise Exception('\n\nCall Function: --> Encryption.en()\n - uniqueID must be an integer.')
             splitInput = [input[i:i+maxLength] for i in range(0, len(input), maxLength)]
             output = ''
             for chunk in splitInput:
@@ -519,6 +546,7 @@ class db_Handler:
         '''This class is relativily pointless. This contains the random equations my stoned a$$ comes up with after I smoked a doobie.'''
         def __init__(self, handler):
             self.handler = handler
+        
         def tireRotationsMpH(speed_mph = 400,
             tire_diameter_inches = 25.5,
             feet_per_mile = 5280,
@@ -698,5 +726,5 @@ class db_Handler:
 # -----------------------------------------------------------------
 # | Testing the handler, and seeing how it works. So far, so good.|
 # |      With the intent of easy use, and easy to understand.     |
-# |                 Also to just look nice. :)                    |
+# |            Also designed to just look nice. :)                |
 # -----------------------------------------------------------------
