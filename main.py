@@ -35,6 +35,7 @@ incrimatationCount='AAAA'
 # Variabled save file additions
 usedCountList = []
 lastDatabaseSaved = None
+mALCount = 0 # Malicios Activity Logger Count
 
 # Temp data (Moving to save file when that has been made/developed)
 def generateNextIncrement():
@@ -89,11 +90,16 @@ class db_Handler:
         self.listStorage = []
         # Owner of the database
         self.owner = None
-        
-        # User data
-        self.userNames = []
-        self.userPw = []
-        self.userID = []
+        # UserName / Passwords
+        self.knownUsers = []
+        # Permission / ID's
+        self.permissions = []
+        # User Logged In
+        self.userLogged = [] # Name, Perm, ID
+        # Permissions allowed
+        self.allowedPermissions = ['admin', 'normal', 'basic']
+        # Unique ID for userPW:
+        self.userPW = None
 
         # Initialize self amoung classes, and classify user functions
         self.edit = self.Edit(self)
@@ -104,6 +110,7 @@ class db_Handler:
         self.users = self.Users(self)
         self.encryption = self.Encryption(self)
         self.randomMath = self.RandonMath(self)
+        self.maliciosActivityLogger = self.MaliciosActivityLogger(self)
     def assignTemp(self, value):
         var = ('TempVar'+str(self.tag))
         globals()[var] = value
@@ -114,8 +121,40 @@ class db_Handler:
         newVar = ('TempVar'+str(self.tag))
         globals()[newVar] = None
     def create(self):
+        '''Used to setup a database. Required if user accounts will be used.'''
         self.mkGlobalTempVars()
-    
+        self.userPW = self.encryption.uniqueIDGen(maxKeyLength=50, password='UserPW', consistantOutput=False)
+    class MaliciosActivityLogger:
+        '''This class is only used/called when data between variables doesn't match and may be a sign of malicios activity.
+        This class logs all calls to itself and will take precautions if malicios data is found depending from where it occured.'''
+        def __init__(self, handler):
+            self.handler = handler
+
+        def report(self, type, data):
+            '''Report malicios activity. This function may be called by mistake if code is improperly maintainted or if a bug occurs.
+            
+            Malicous Types: Set type as one of the following in string format. Case sensative.
+            - (Data Mismatch): Data between variables doesn't match or is invalid.
+            - 
+            '''
+            knownType = ['Data Mismatch', 'LoggedInUserDoesNotExist']
+            if type not in knownType:
+                raise Exception('Invalid Malicios Type. Please use one of the following: {}'.format(knownType))
+            # Log the data
+            self.log(type=type, data=data)
+            
+        def log(self, type, data):
+            '''Logs data into a logger file.'''
+            # if exists, add to file
+            if os.path.exists('activityLogger.txt') == True:
+                file = open('activityLogger.txt', 'a')
+            # if not, create file
+            else:
+                file = open('activityLogger.txt', 'w')
+            # Write data. type, time and date, then data, then add 2 lines for spacing
+            file.write('Type:',type,'Time:',time.time(),'Date:',time.strftime('%Y-%m-%d %H:%M:%S'),'\nData:',data,'\n\n')
+            file.close()
+            
     class Users:
         '''User management class. This class is used to manage users within the database.
         \n - Allows you to do the following:
@@ -123,20 +162,114 @@ class db_Handler:
         \n - Create/Remove users
         \n - Enable/Disable writing of particular columns in the database
         '''
+        # 
         def __init__(self, handler):
             self.handler = handler
         
-        def create(self, name, passw, id):
+        def permissionsAllowed(self, perm):
+            '''Checks wether a permission is allowed to be used.
+            Retuns:
+            - True: Allowed
+            - False: Not allowed'''
+            if perm in self.handler.allowedPermissions:
+                return True
+            return False
+
+        def verifyUserLoggedExists(self):
+            '''Checks whether the user logged actually exists within known users. If not, assume malicous activity occured. Reports are automaically done.
+            
+            Returns:
+            - True: User Found/Verified
+            - False: User Not Found/Invalid Data
+            '''
+            nameF, permF = False, False
+            for user in self.handler.knownUsers:
+                for perm in self.handler.permissions:
+                    if user[0] == self.handler.userLogged[0]:
+                        nameF = True
+                        if perm[0] == self.handler.userLogged[1]:
+                            permF = True
+                            if perm[1] == self.handler.userLogged[2]:
+                                return True
+            if nameF == False or permF == False:
+                self.handler.MaliciosActivityLogger.report(type='LoggedInUserDoesNotExist', data=[self.handler.userLogged[0], self.handler.userLogged[1], self.handler.userLogged[2]])
+            # Else return False
+            return False
+
+        def checkNameInUse(self, name):
+            '''Check argument (name) against know users.
+            Args:
+            - name(str): (name) to check
+            Returns: 
+            - Name In use: False
+            - Name Not in use: True'''
+            cList = self.handler.knownUsers # Check List
+            for user in cList:
+                if user[0] == name:
+                    return False
+            return True
+
+        def checkIDInUse(self, id):
+            '''Check argument (id) against know users.
+            Args:
+            - id(str): (id) to check
+            Returns: 
+            - ID In use: False
+            - ID Not in use: True'''
+            cList = self.handler.permissions # Check List
+            for user in cList:
+                if user[1] == id:
+                    return False
+            return True
+        
+        def create(self, name, passw, permission, id):
             '''Create a user. Requires admin permissions to create a user, unless no users exist. After the first user is created, only the admins can modify users.
             
             Args:
-            - name: Username
-            - passw: Password
-            - id: Refference ID'''
+            - name(str): Username
+            - passw(str): Password
+            - permission(str): Permission
+            - id(str): Refference ID, Must be unique to the account, cannot be used more than once. Checks are done.'''
             # Will use db_Handler to store user data
             # Encryption will be managed by db_Handler.Encryption.en()
-            # 
-            pass
+            # Check Arguments
+            exCall = '\n\nCall Function: --> Users.create()\n'  # Exception Call
+            strList = ['name', 'passw', 'id', 'permission']
+            for item in strList:
+                if not type(locals()[item]) == str:
+                    raise Exception(exCall + 'Invalid Argument Type({}), must be string.'.format(str(item)))
+            # Verify permission is allowed
+            if not self.permissionsAllowed(permission):
+                raise PermissionError('Argument: (Permission) Invalid Permission')
+            # Verify Password Is allowed
+            if not self.handler.encryption.VerifyPassword(input = passw):
+                raise ValueError("Argument: (Password) contains invalid characters.")
+            # Verify ID selected is not in use
+            if not self.checkIDInUse(id):
+                raise Exception("Argument: (id) Already in use by another user")
+            # Verify Name selected is not in use
+            if not self.checkNameInUse(name):
+                raise Exception('Argument: (Name): Already in use')
+            # Check if permissions are required for user creation.
+            # Start with checking current user logged:
+            checkPass = False
+            # If no users are created yet, and no user is logged in, bypass verifacation.
+            if self.handler.knownUsers == [] and self.handler.permissions == []:
+                if self.handler.userLogged == []:
+                    checkPass = True
+            else:
+                if self.handler.userLogged == []:
+                    # A user logged in, and with admin permissions is required for creation, so throw Exception.
+                    raise Exception('A user needs to be signed in with a admin role to create a user.')
+                
+                if self.handler.userLogged != []:
+                    # If User is logged in, verify name, permission, and check to see if that account actually exists, or has it been malicisouly modified.
+                    if self.verifyUserLoggedExists() == True:
+                        if self.handler.userLogged[1] == 'admin':
+                            checkPass = True # Allow Modifacations.
+            if checkPass == True:
+                self.handler.knownUsers.append([name, passw])
+                self.handler.permissions.append([permission, id])
 
         def remove(self, name):
             '''Remove a user'''
@@ -146,6 +279,20 @@ class db_Handler:
         def __init__(self, handler):
             self.hanlder = handler
 
+        def VerifyPassword(self, input):
+            '''Verify a password is valid and doesn\'t contain anyn characters that are not allowed.
+            
+            Args:
+            - input(str): The password to verify
+
+            Retuns:
+            - True: Password Meets Requirments
+            - False: Password is invalid'''
+            allowed_chars = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # Excluded confusing characters
+            if any(char not in allowed_chars for char in input):
+                return False
+            return True
+        
         def uniqueIDGen(self, inputLength=5, maxKeyLength=50, luckyNumber=None, password=None, consistantOutput=False):
             '''Creates a random Key for encryption. The longer the key, the stronger the encryption. 
             \n The design behind this generator is to create a key that is random, but also a nuicance to decrypt.
@@ -183,14 +330,12 @@ class db_Handler:
 
             # Validate and process password
             if password:
-                allowed_chars = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # Excluded confusing characters
-                if any(char not in allowed_chars for char in password):
+                if not self.VerifyPassword(password):
                     raise ValueError("password contains invalid characters.")
                 # Use hashing to generate a unique number from password
                 hash_object = hashlib.sha256(password.encode()) 
                 experimental_number = int(hash_object.hexdigest(), 16)
                 random.seed(experimental_number)
-                print('Experimental_number:',experimental_number)
                 luckyNumber = experimental_number
             else:
                 random.seed(luckyNumber)
@@ -585,8 +730,6 @@ class db_Handler:
             Ex of filename: db_AAAA-1-11-24.zip'''
             pass
             
-            
-
     class Save:
         def __init__(self, handler):
             self.handler = handler
@@ -595,7 +738,7 @@ class db_Handler:
             '''Saves the entire db instance. This includes all data, columns, and meta data.'''
             global lastDatabaseSaved
             # You can save a database even if it's empty. Allows for an easy setup of hundreds of databases.
-            # Vars saved: tag, columnStorage, listStorage, incrementCount, usedCountList
+            # Vars saved: tag, columnStorage, listStorage, owner, knownUsers, permissions, userLogged, allowedPermissions, userPW
 
             # Make the name for our save file
             saveNm='db_'+str(self.handler.tag[0])+'.txt'
@@ -624,6 +767,7 @@ class db_Handler:
                 f.write('tag = '+str(self.handler.tag[0])+'\n')
                 f.write('columnStorage = '+str(self.handler.columnStorage)+'\n')
                 f.write('listStorage = '+str(self.handler.listStorage)+'\n')
+                f.write()
                 f.close()
 
             # All done!
@@ -641,6 +785,7 @@ class db_Handler:
             file = open('variableSave.py', 'w+')
             file.write('usedCountList = {}'.format(usedCountList))
             file.write('\nlastDatabaseSaved = {}'.format(lastDatabaseSaved))
+            file.write('\nmALCount = {}'.format(mALCount))
             file.close()
 
     def load(self, tag=None, excuse=[]):
