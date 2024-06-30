@@ -6,11 +6,12 @@
 
 # Ideas for settings:
 # max_allowsRows - A db can only have ? rows within it.
+# max_allowColumns - a db can only have ? columns within it.
 # CaseSensativityAmoungColumnNames=True
+# loadDBOnEachStartup = 'AAAA' or None(Doesn't load anything)
 
 #Grouped Files
 # 1) handler_showcase.py
-# 2) SaveHeader.txt
 
 
 # -------------------------------------------------------------- #
@@ -19,7 +20,8 @@
 #               Supported and backed by Dakota H.                #
 #                                                                #
 # -------------------------------------------------------------- #
-import os, sys, shutil
+import os, sys, shutil, random, time, hashlib
+sys.set_int_max_str_digits(1000000)
 print('Current Path Set:', os.getcwd())
 os.chdir('App')
 print('Current Version: Testing Only!')
@@ -100,6 +102,7 @@ class db_Handler:
         self.save = self.Save(self)
         self.mods = self.Mods(self)
         self.users = self.Users(self)
+        self.encryption = self.Encryption(self)
         self.randomMath = self.RandonMath(self)
     def assignTemp(self, value):
         var = ('TempVar'+str(self.tag))
@@ -126,7 +129,83 @@ class db_Handler:
             pass
 
     class Encryption:
-        def en(input, uniqueID, r=False, acc4decrywithIOverflow=False, debug=False, InvertedCount=False, maxLength=9, decrypt=False):
+        def __init__(self, handler):
+            self.hanlder = handler
+
+        def uniqueIDGen(self, inputLength, maxKeyLength=50, luckyNumber=None, experimentalCharPassword=None, consistantOutput=False):
+            '''Creates a random Key for encryption. The longer the key, the stronger the encryption. 
+            \n The design behind this generator is to create a key that is random, but also a nuicance to decrypt.
+            \n
+            \nArgs:
+            \n- inputLength(int): The length of the input, used in deciding the key
+            \n-  -  Ensure count starts from 0, as it's indexes are needed for indices.
+            \n-  -  Ex: If Input is 'Password', then the Length is 7. Not 8. If we start from 0.
+            \n- maxKeyLength(int): How long the random key is allowed to be. 
+            \n-  -  The key generated will be a random length from maxKeyLength/2 to max_Key_length
+            \n-  -  Max for this var is: 10,000.
+            \n- luckyNumber(int): A number you think is lucky. Some random number. Similar to experimentalCharPassword, but only numbers.
+            \n- experimentalCharPassword(str): In progress.. Using a character password, a unique number is created and used in place of luckyNumber. The number is unique to character location whithin a string, what character is where, etc...
+            \n- consistantOutput(bool): Disables the randomization used by time.time(), creating a consisting output
+
+            \n
+            \n Use Example:
+            \n - .uniqueIDGen(inputLength=5, maxKeyLength=100)
+            \nReturn(s):
+            \n- uniqueID(int)
+            \n
+            \nNotes:
+            \n1) No 2 chars next to eachother will be the same.
+            '''
+            # Check arguments:
+            if luckyNumber == None and experimentalCharPassword == None:
+                luckyNumber = random.randint(1, 50)
+            if maxKeyLength > 10000:
+                raise Exception('\n\nCall Function: --> Encryption.uniqueIDGen()\nMax Key Length is too large. Max is 10000')
+            exCall = '\n\nCall Function: --> Encryption.uniqueIDGen()\n'  # Exception Call
+            intList = ['inputLength', 'maxKeyLength']  # Removed luckyNumber from intList
+            for item in intList:
+                if not isinstance(locals()[item], int):
+                    raise Exception(exCall + 'Invalid Argument Type({}), must be int.'.format(str(item)))
+
+            # Validate and process experimentalCharPassword
+            if experimentalCharPassword:
+                allowed_chars = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # Excluded confusing characters
+                if any(char not in allowed_chars for char in experimentalCharPassword):
+                    raise ValueError("experimentalCharPassword contains invalid characters.")
+                # Use hashing to generate a unique number from experimentalCharPassword
+                hash_object = hashlib.sha256(experimentalCharPassword.encode()) 
+                experimental_number = int(hash_object.hexdigest(), 16)
+                random.seed(experimental_number)
+                print('Experimental_number:',experimental_number)
+                luckyNumber = experimental_number
+            else:
+                random.seed(luckyNumber)
+
+            mxSize = random.randint(maxKeyLength // 2, maxKeyLength)
+            random.seed(time.time())
+            keyOut = ' '
+            for gen in range(mxSize):
+                while True:
+                    new_key = str(random.randint(0, inputLength))
+                    if keyOut[-1] == new_key:
+                        continue
+                    else:
+                        break
+                keyOut += new_key
+                random.seed(random.randint(0, gen))
+                b1 = int(random.randint(1, int(time.time())))
+                b2 = int(random.randint(0, luckyNumber))
+                random.seed((int(b1) + int(b2)))
+                b3 = random.randint(0, 100)
+                b4 = random.randint(0, 3)
+                if b4 == 0:
+                    random.seed(time.time() * b3)
+                elif b4 == 1:
+                    random.seed(time.time() + b3)
+                else:
+                    random.seed(time.time() - b3)
+            return keyOut
+        def en(self, input, uniqueID, r=False, acc4decrywithIOverflow=False, debug=False, InvertedCount=False, maxLength=9, decrypt=False):
             '''Using an inputed string and unique number, we can scatter the actual input
             
             Args:
@@ -146,9 +225,10 @@ class db_Handler:
             - encrypting: en('Hello', 1234)
             - decrypting: en('Hello', 1234, decrypt=True)
             All other settings are optional and are designed for more advanced usage.
-            
+
             Returns:
-            - Encrypted output'''
+            - Encrypted output
+            '''
             splitInput = [input[i:i+maxLength] for i in range(0, len(input), maxLength)]
             output = ''
             for chunk in splitInput:
@@ -436,6 +516,7 @@ class db_Handler:
             if hide == False: print('Error: Input is not string.')
     
     class RandonMath:
+        '''This class is relativily pointless. This contains the random equations my stoned a$$ comes up with after I smoked a doobie.'''
         def __init__(self, handler):
             self.handler = handler
         def tireRotationsMpH(speed_mph = 400,
@@ -462,13 +543,21 @@ class db_Handler:
             '''Creates a folder to store backups.'''
             os.mkdir('db_'+str(self.handler.tag[0])+'_Backups')
         
-        def clearBackups(self):
-            '''Clears all backups for the database.'''
+        def clearBackups(self, tag, exemptOne=False, afterCreateBackup=False):
+            '''Clears all backups for the database.
+            
+            Args:
+            - tag(str): The tag of the database to remove all backups for.
+            - exemptyOne(Bool): Remove all but the latest backup.
+            - afterCreateBackup(bool): After removals, create a brand new backup.'''
             pass
         
         def compressBackups(self):
-            '''Compresses all backups for the database into a zip file.'''
+            '''Compresses all backups for the database into a zip file. Zips will be located in a folder called (zippedBackups)
+            Ex of filename: db_AAAA-1-11-24.zip'''
             pass
+            
+            
 
     class Save:
         def __init__(self, handler):
