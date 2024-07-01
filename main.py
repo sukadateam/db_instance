@@ -82,7 +82,7 @@ class db_Handler:
         # Active Status, 
         self.info = [True]
         # Global Temp Var Identifier
-        self.tag = [generateNextIncrement()] # Makes self tag unique for each database, temp vars don't colide this way.
+        self.tag = [str(generateNextIncrement())] # Makes self tag unique for each database, temp vars don't colide this way.
         
         # Data
         self.columnStorage = []
@@ -111,6 +111,7 @@ class db_Handler:
         self.encryption = self.Encryption(self)
         self.randomMath = self.RandonMath(self)
         self.maliciosActivityLogger = self.MaliciosActivityLogger(self)
+        self.authentication = self.Authentication(self)
     def assignTemp(self, value):
         var = ('TempVar'+str(self.tag))
         globals()[var] = value
@@ -133,11 +134,15 @@ class db_Handler:
         def report(self, type, data):
             '''Report malicios activity. This function may be called by mistake if code is improperly maintainted or if a bug occurs.
             
-            Malicous Types: Set type as one of the following in string format. Case sensative.
-            - (Data Mismatch): Data between variables doesn't match or is invalid.
+            Malicous Types: Set type as one of the following in string format. Case sensative. Next is the level of danger.
+            - (Data Mismatch): Data between variables doesn't match or is invalid. (2/10)
+            - (LoggedInUserDoesNotExist): User logged in does not exist within known users. (10/10)
+            - (Failed Authentication): Failed to authenticate user. (5/10)
             - 
             '''
-            knownType = ['Data Mismatch', 'LoggedInUserDoesNotExist']
+            knownType = ['Data Mismatch', 
+                         'LoggedInUserDoesNotExist', 
+                         'Failed Authentication']
             if type not in knownType:
                 raise Exception('Invalid Malicios Type. Please use one of the following: {}'.format(knownType))
             # Log the data
@@ -152,9 +157,42 @@ class db_Handler:
             else:
                 file = open('activityLogger.txt', 'w')
             # Write data. type, time and date, then data, then add 2 lines for spacing
-            file.write('Type:',type,'Time:',time.time(),'Date:',time.strftime('%Y-%m-%d %H:%M:%S'),'\nData:',data,'\n\n')
+            file.write(str(('Type:',type,'Time:',time.time(),'Date:',time.strftime('%Y-%m-%d %H:%M:%S'),'\nData:',data,'\n\n')))
             file.close()
+    
+    class Authentication:
+        def __init__(self, handler):
+            self.handler = handler
+        
+        def signin(self, user, passw):
+            '''Login to an existing account!'''
+            if self.checkCreds(user, passw):
+                out1 = self.handler.users.returnUserPerm(user)
+                if out1 == False:
+                    raise Exception('Unable to retrieve permissions for user.')
+                out2 = self.handler.users.returnUserId(user)
+                if out2 == False:
+                    raise Exception('Unable to retrieve id for user.')
+                self.handler.userLogged = [user, out1, out2]
+                print('Authentication Success...')
+                return
+            else:
+                self.handler.maliciosActivityLogger.report(type='Failed Authentication', data=[user, passw])
+                return
             
+        def signout():
+            '''Sign out of your logged in account!'''
+            pass
+            
+        def checkCreds(self, user, passw):
+            '''Verifys creds are correct.'''
+            for userS in self.handler.knownUsers:
+                if userS[0] == user:
+                    if userS[1] == passw:
+                        return True
+            # Return False if creds are not found.
+            return False
+
     class Users:
         '''User management class. This class is used to manage users within the database.
         \n - Allows you to do the following:
@@ -165,6 +203,20 @@ class db_Handler:
         # 
         def __init__(self, handler):
             self.handler = handler
+        
+        def returnUserPerm(self, name):
+            '''Returns the permission of a given user. Returns False if nothing found.'''
+            for x in range(len(self.handler.knownUsers)):
+                if self.handler.knownUsers[x][0] == name:
+                    return self.handler.permissions[x][0]
+            return False
+
+        def returnUserId(self, name):
+            '''Returns the id of a given user. Returns Fase if nothing found.'''
+            for x in range(len(self.handler.knownUsers)):
+                if self.handler.knownUsers[x][0] == name:
+                    return self.handler.permissions[x][1]
+            return False
         
         def permissionsAllowed(self, perm):
             '''Checks wether a permission is allowed to be used.
@@ -182,16 +234,18 @@ class db_Handler:
             - True: User Found/Verified
             - False: User Not Found/Invalid Data
             '''
-            nameF, permF = False, False
+            nameF = False
             for user in self.handler.knownUsers:
                 for perm in self.handler.permissions:
                     if user[0] == self.handler.userLogged[0]:
                         nameF = True
                         if perm[0] == self.handler.userLogged[1]:
-                            permF = True
+                            print(perm[1], self.handler.userLogged[2])
                             if perm[1] == self.handler.userLogged[2]:
                                 return True
-            if nameF == False or permF == False:
+                            
+                        
+            if nameF == False:
                 self.handler.MaliciosActivityLogger.report(type='LoggedInUserDoesNotExist', data=[self.handler.userLogged[0], self.handler.userLogged[1], self.handler.userLogged[2]])
             # Else return False
             return False
@@ -265,6 +319,7 @@ class db_Handler:
                 if self.handler.userLogged != []:
                     # If User is logged in, verify name, permission, and check to see if that account actually exists, or has it been malicisouly modified.
                     if self.verifyUserLoggedExists() == True:
+                        print('hef')
                         if self.handler.userLogged[1] == 'admin':
                             checkPass = True # Allow Modifacations.
             if checkPass == True:
@@ -741,7 +796,12 @@ class db_Handler:
             # Vars saved: tag, columnStorage, listStorage, owner, knownUsers, permissions, userLogged, allowedPermissions, userPW
 
             # Make the name for our save file
-            saveNm='db_'+str(self.handler.tag[0])+'.txt'
+            # Prevents the tag getting bracketed. Ex: db_[AAAA].txt
+            try:
+                saveNm='db_'+str(self.handler.tag[0][0])+'.txt'
+            except Exception as f:
+                print(f)
+                saveNm='db_'+str(self.handler.tag[0])+'.txt'
 
             # Check if file exists
             if os.path.exists('db_'+str(self.handler.tag[0])+'.txt'):
@@ -763,11 +823,13 @@ class db_Handler:
                 os.remove(saveNmBk)
 
             # Now, we save the database.
-            svList = ['tag', 'columnStorage', 'listStorage', 'owner', 'knownUsers', 'permissions', 'userLogged', 'allowedPermissions', 'userPW']
+            svList = ['columnStorage', 'listStorage', 'owner', 'knownUsers', 'permissions', 'userLogged', 'allowedPermissions', 'userPW']
+            print(saveNm)
             with open(saveNm, 'w') as f:
+                f.write('tag = '+str(self.handler.tag[0])+'\n')
                 for item in svList:
                     actual_value = getattr(self.handler, item)
-                    f.write(item + ' = ' + str(actual_value)+'\n')
+                    f.write(item + ' = ' + str(actual_value) +'\n')
                 f.write('')
                 f.close()
 
@@ -841,7 +903,7 @@ class db_Handler:
                             # Verify excuses before setting values
                             if 'tag' not in excuse:
                                 if name == 'tag':
-                                    self.tag[0] = value
+                                    self.tag[0] = eval(value)
                             if 'columnStorage' not in excuse:
                                 if name == 'columnStorage':
                                     self.columnStorage = eval(value)
