@@ -166,23 +166,27 @@ class db_Handler:
         
         def signin(self, user, passw):
             '''Login to an existing account!'''
-            if self.checkCreds(user, passw):
-                out1 = self.handler.users.returnUserPerm(user)
-                if out1 == False:
-                    raise Exception('Unable to retrieve permissions for user.')
-                out2 = self.handler.users.returnUserId(user)
-                if out2 == False:
-                    raise Exception('Unable to retrieve id for user.')
-                self.handler.userLogged = [user, out1, out2]
-                print('Authentication Success...')
-                return
+            if self.handler.userLogged == []:
+                if self.checkCreds(user, passw):
+                    out1 = self.handler.users.returnUserPerm(user)
+                    if out1 == False:
+                        raise Exception('Unable to retrieve permissions for user.')
+                    out2 = self.handler.users.returnUserId(user)
+                    if out2 == False:
+                        raise Exception('Unable to retrieve id for user.')
+                    self.handler.userLogged = [user, out1, out2]
+                    print('Authentication Success...')
+                    return
+                else:
+                    self.handler.maliciosActivityLogger.report(type='Failed Authentication', data=[user, passw])
+                    return
             else:
-                self.handler.maliciosActivityLogger.report(type='Failed Authentication', data=[user, passw])
-                return
+                raise Exception('A user is already logged in. Cannot login more than 1 user at a time.')
             
-        def signout():
+        def signout(self):
             '''Sign out of your logged in account!'''
-            pass
+            # Reset var
+            self.handler.userLogged = []
             
         def checkCreds(self, user, passw):
             '''Verifys creds are correct.'''
@@ -200,7 +204,6 @@ class db_Handler:
         \n - Create/Remove users
         \n - Enable/Disable writing of particular columns in the database
         '''
-        # 
         def __init__(self, handler):
             self.handler = handler
         
@@ -292,16 +295,16 @@ class db_Handler:
             for item in strList:
                 if not type(locals()[item]) == str:
                     raise Exception(exCall + 'Invalid Argument Type({}), must be string.'.format(str(item)))
-            # Verify permission is allowed
+            # Verify new permission is allowed
             if not self.permissionsAllowed(permission):
                 raise PermissionError('Argument: (Permission) Invalid Permission')
-            # Verify Password Is allowed
+            # Verify new Password Is allowed
             if not self.handler.encryption.VerifyPassword(input = passw):
                 raise ValueError("Argument: (Password) contains invalid characters.")
-            # Verify ID selected is not in use
+            # Verify new ID selected is not in use
             if not self.checkIDInUse(id):
                 raise Exception("Argument: (id) Already in use by another user")
-            # Verify Name selected is not in use
+            # Verify new Name selected is not in use
             if not self.checkNameInUse(name):
                 raise Exception('Argument: (Name): Already in use')
             # Check if permissions are required for user creation.
@@ -319,17 +322,37 @@ class db_Handler:
                 if self.handler.userLogged != []:
                     # If User is logged in, verify name, permission, and check to see if that account actually exists, or has it been malicisouly modified.
                     if self.verifyUserLoggedExists() == True:
-                        print('hef')
                         if self.handler.userLogged[1] == 'admin':
                             checkPass = True # Allow Modifacations.
+                        else:
+                            raise Exception('The user logged in, if logged in, does not have admin rights to run this action.')
             if checkPass == True:
                 self.handler.knownUsers.append([name, passw])
                 self.handler.permissions.append([permission, id])
 
         def remove(self, name):
-            '''Remove a user'''
-            pass
+            '''Remove a user. Requires admin permissions.
+            Returns:
+            - True: Removed User Successfuly
+            - False: The user was not removed, and/or found.'''
+            if self.handler.userLogged != []:
+                if self.verifyUserLoggedExists() == True:
+                    if self.handler.userLogged[1] == 'admin':
+                        for x in range(len(self.handler.knownUsers)):
+                            if self.handler.knownUsers[x][0] == name:
+                                self.handler.knownUsers[x].pop()
+                                self.handler.permissions[x].pop()
+                                # If userLogged in remvoed themselves. Remove them from being logged in.
+                                if self.handler.userLogged[0] == name:
+                                    self.handler.userLogged = []
+                    else:
+                        raise Exception('The user logged in, if logged in, does not have admin rights to run this action.')
+                else:
+                    raise Exception('Invalid Data within userLogged')
+            else:
+                raise Exception('No user is currently signed in. Admin permissions are required for this action.')
 
+                     
     class Encryption:
         def __init__(self, handler):
             self.hanlder = handler
@@ -790,10 +813,10 @@ class db_Handler:
             self.handler = handler
 
         def all(self):
-            '''Saves the entire db instance. This includes all data, columns, and meta data.'''
+            '''Saves the entire db instance. This includes all data, rows/columns, and meta data.'''
             global lastDatabaseSaved
             # You can save a database even if it's empty. Allows for an easy setup of hundreds of databases.
-            # Vars saved: tag, columnStorage, listStorage, owner, knownUsers, permissions, userLogged, allowedPermissions, userPW
+            # Vars saved: tag, columnStorage, listStorage, owner, knownUsers, permissions, allowedPermissions, userPW
 
             # Make the name for our save file
             # Prevents the tag getting bracketed. Ex: db_[AAAA].txt
@@ -823,7 +846,7 @@ class db_Handler:
                 os.remove(saveNmBk)
 
             # Now, we save the database.
-            svList = ['columnStorage', 'listStorage', 'owner', 'knownUsers', 'permissions', 'userLogged', 'allowedPermissions', 'userPW']
+            svList = ['columnStorage', 'listStorage', 'owner', 'knownUsers', 'permissions', 'allowedPermissions', 'userPW']
             print(saveNm)
             with open(saveNm, 'w') as f:
                 f.write('tag = '+str(self.handler.tag[0])+'\n')
@@ -861,7 +884,12 @@ class db_Handler:
         Excusable Variables:
         - columnStorage
         - listStorage
-        - tag (Only call if you know what your doing)'''
+        - tag (Only excuse if you know what your doing) must be reassigned after.
+        - owner
+        - known users
+        - permissions
+        - allowedPermissions
+        - userPW'''
 
         # Check excusable variables
         allowedExcuses = ['columnStorage', 'listStorage', 'tag', 'owner', 'knownUsers', 'permissions', 'userLogged', 'allowedPermissions', 'userPW']
@@ -919,9 +947,6 @@ class db_Handler:
                             if 'permissions' not in excuse:
                                 if name == 'permissions':
                                     self.permissions = eval(value)
-                            if 'userLogged' not in excuse:
-                                if name == 'userLogged':
-                                    self.userLogged = eval(value)
                             if 'allowedPermissions' not in excuse:
                                 if name == 'allowedPermissions':
                                     self.allowedPermissions = eval(value)
@@ -934,10 +959,10 @@ class db_Handler:
                     raise Exception('\n\nCall Function: --> db_Handler.load()\nDatabase save file does not exist.')
             
     class Meta:
+        '''Add or Modify meta data of a database.'''
         def __init__(self, handler):
             self.handler = handler
 
-        '''Add or Modify meta data of a database.'''
         def status(self, newStatus=None):
             '''Change the status of the database. Doesn\'t disable the handler. Used as a marker.
             Args:
