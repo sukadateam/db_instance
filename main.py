@@ -20,11 +20,11 @@
 #               Supported and backed by Dakota H.                #
 #                                                                #
 # -------------------------------------------------------------- #
-import os, sys, shutil, random, time, hashlib, builtins
+import os, sys, shutil, random, time, hashlib, builtins, datetime, zipfile
 sys.set_int_max_str_digits(1000000)
 print('Current Path Set:', os.getcwd())
 os.chdir('App')
-print('Current Version: Testing Only!')
+print('Current Version: 0.1')
 
 
 
@@ -112,6 +112,8 @@ class db_Handler:
         self.randomMath = self.RandonMath(self)
         self.maliciosActivityLogger = self.MaliciosActivityLogger(self)
         self.authentication = self.Authentication(self)
+        self.backup = self.Backup(self)
+    
     def assignTemp(self, value):
         var = ('TempVar'+str(self.tag))
         globals()[var] = value
@@ -161,6 +163,7 @@ class db_Handler:
             file.close()
     
     class Authentication:
+        '''User authentication class. Credential Check, Signin, Signout'''
         def __init__(self, handler):
             self.handler = handler
         
@@ -202,7 +205,24 @@ class db_Handler:
         \n - Allows you to do the following:
         \n - disable/enable users
         \n - Create/Remove users
-        \n - Enable/Disable writing of particular columns in the database
+        \n - Enable/Disable writing and/or reading of particular columns in the database
+        \n - Enable/Disable writing and/or reading of particular rows in the database
+        \n\nlist of functions:
+        \n - returnUserPerm(name) # Permission of user
+        \n - returnUserId(name) # ID of user
+        \n - permissionsAllowed(perm) # Check if permission is allowed, checks against allowedPermissions
+        \n - verifyUserLoggedExists() # Check if user logged in exists within known users
+        \n - checkNameInUse(name) # Check if name is in use
+        \n - checkIDInUse(id) # Check if id is in use
+        \n - create(name, passw, permission, id) # Create a user
+        \n - remove(name) # Remove a user
+        \n\nFunctions to be implemented:
+        \n - disableUser(name) # Disable a user
+        \n - enableUser(name) # Enable a user
+        \n - disableColumn(column, name) # Disable writing to a column
+        \n - enableColumn(column, name) # Enable writing to a column
+
+
         '''
         def __init__(self, handler):
             self.handler = handler
@@ -352,7 +372,22 @@ class db_Handler:
             else:
                 raise Exception('No user is currently signed in. Admin permissions are required for this action.')
 
-                     
+        def disableUser(self, name):
+            '''Disable a user. Requires admin permissions.'''   
+            pass
+            
+        def enableUser(self, name):
+            '''Enable a user. Requires admin permissions.'''
+            pass
+        
+        def disableColumn(self, column, name):
+            '''Disable writing to a column. Requires admin permissions.'''
+            pass
+        
+        def enableColumn(self, column, name):
+            '''Enable writing to a column if disabled. Requires admin permissions.'''
+            pass
+    
     class Encryption:
         def __init__(self, handler):
             self.hanlder = handler
@@ -579,7 +614,7 @@ class db_Handler:
                 raise Exception('\n\nCall Function: --> db_Handler.Edit.addRow()\nRow length must be the same as the column length.')
     
     class Mods:
-        '''Things I personally would love to have built into a handler. But done simply! None of that complicated shit.'''
+        '''Things I personally would love to have built into a handler. But done simply! None of that complicated shit. Functions in here are soley ideas.'''
         def __init__(self, handler):
             self.handler = handler
         
@@ -638,6 +673,10 @@ class db_Handler:
             # Update listStorage
             self.handler.listStorage = rows
                     
+        def setPermForColumn(self):
+            '''Set permissions for a column. Allows you to set permissions for a column, and who can read/write to it.'''
+            pass
+
     class Data:
         def __init__(self, handler):
             self.handler = handler
@@ -800,13 +839,55 @@ class db_Handler:
             Args:
             - tag(str): The tag of the database to remove all backups for.
             - exemptyOne(Bool): Remove all but the latest backup.
-            - afterCreateBackup(bool): After removals, create a brand new backup.'''
-            pass
+            - afterCreateBackup(bool): After removals, create a brand new backup. Only works if the dB specified, is this one.
+            
+            Exceptions:
+            - dB backups with tag does not exist.
+            - Cannot backup unloaded database.'''
+            # Check if folder exists
+            if not os.path.exists('db_'+str(tag)+'_Backups'):
+                raise Exception('\n\nCall Function: --> db_Handler.Backup.clearBackups()\nDatabase backups with tag does not exist.')
+            # Get all files in folder
+            files = os.listdir('db_'+str(tag)+'_Backups')
+            # Change directory to folder
+            os.chdir('db_'+str(tag)+'_Backups')
+            # Remove all files, except the latest one if exemptOne is True
+            if exemptOne:
+                for file in files:
+                    if file != files[-1]:
+                        os.remove(file)
+            else:
+                for file in files:
+                    os.remove(file)
+            # Create a new backup if afterCreateBackup is True
+            if afterCreateBackup:
+                if self.handler.tag[0] == tag:
+                    self.handler.save.all()
+                else:
+                    raise Exception('\n\nCall Function: --> db_Handler.Backup.clearBackups()\nCannot backup unloaded database. Please ensure the database is loaded, and the database being cleared is the one currently running this instance. Current tag: '+str(self.handler.tag[0]))
         
-        def compressBackups(self):
+        def compressBackups(self, tag):
             '''Compresses all backups for the database into a zip file. Zips will be located in a folder called (zippedBackups)
             Ex of filename: db_AAAA-1-11-24.zip'''
-            pass
+            # Check if folder exists
+            if not os.path.exists('db_'+str(self.handler.tag[0])+'_Backups'):
+                raise Exception('\n\nCall Function: --> db_Handler.Backup.compressBackups()\nDatabase backups with tag does not exist.')
+            # Get all files in folder
+            files = os.listdir('db_'+str(self.handler.tag[0])+'_Backups')
+            # Change directory to folder
+            os.chdir('db_'+str(self.handler.tag[0])+'_Backups')
+            # Zip all files with zipfile.CompleteDirs
+            with zipfile.ZipFile('db_'+str(self.handler.tag[0])+'-'+str(datetime.datetime.now().month)+'-'+str(datetime.datetime.now().day)+'.zip', 'w') as zipf:
+                for file in files:
+                    zipf.write(file)
+            # Check if zippedBackups folder exists
+            if not os.path.exists('../zippedBackups'):
+                os.mkdir('../zippedBackups')
+            # Move zip to folder
+            os.rename('db_'+str(self.handler.tag[0])+'-'+str(datetime.datetime.now().month)+'-'+str(datetime.datetime.now().day)+'.zip', '../zippedBackups/db_'+str(self.handler.tag[0])+'-'+str(datetime.datetime.now().month)+'-'+str(datetime.datetime.now().day)+'.zip')
+            # Remove all files
+            for file in files:
+                os.remove(file)
             
     class Save:
         def __init__(self, handler):
@@ -820,11 +901,7 @@ class db_Handler:
 
             # Make the name for our save file
             # Prevents the tag getting bracketed. Ex: db_[AAAA].txt
-            try:
-                saveNm='db_'+str(self.handler.tag[0][0])+'.txt'
-            except Exception as f:
-                print(f)
-                saveNm='db_'+str(self.handler.tag[0])+'.txt'
+            saveNm='db_'+str(self.handler.tag[0])+'.txt'
 
             # Check if file exists
             if os.path.exists('db_'+str(self.handler.tag[0])+'.txt'):
@@ -846,13 +923,14 @@ class db_Handler:
                 os.remove(saveNmBk)
 
             # Now, we save the database.
-            svList = ['columnStorage', 'listStorage', 'owner', 'knownUsers', 'permissions', 'allowedPermissions', 'userPW']
+            svList = ['columnStorage', 'listStorage', 'owner', 'knownUsers', 'permissions', 'allowedPermissions']
             print(saveNm)
             with open(saveNm, 'w') as f:
-                f.write('tag = '+str(self.handler.tag[0])+'\n')
+                f.write('tag = '+str(self.handler.tag)+'\n')
                 for item in svList:
                     actual_value = getattr(self.handler, item)
                     f.write(item + ' = ' + str(actual_value) +'\n')
+                f.write('userPW = "'+str(self.handler.userPW[1:])+'"\n')
                 f.write('')
                 f.close()
 
@@ -899,10 +977,10 @@ class db_Handler:
         
         if tag != None:
             # Set the tag to the one given
-            self.tag[0] = tag
+            self.tag = [tag]
         elif tag == None and lastDatabaseSaved != None:
             # Set the tag to the last saved database
-            self.tag[0] = lastDatabaseSaved
+            self.tag = [lastDatabaseSaved]
         else:
             raise Exception('\n\nCall Function: --> db_Handler.load()\nNo tag given, and no database has been saved yet. Unable to automatically determine what to load.')
         
@@ -952,8 +1030,14 @@ class db_Handler:
                                     self.allowedPermissions = eval(value)
                             if 'userPW' not in excuse:
                                 if name == 'userPW':
-                                    self.userPW = eval(value)
-
+                                    self.userPW = int(eval(value))
+                    try:
+                        # if the tag within the list (tag) is a list in a list, remove the within list.
+                        # Fixes the issue of the tag being a list within a list.
+                        if type(self.tag[0]) == list:
+                            self.tag = self.tag[0]
+                    except:
+                        pass
                     print('Database loaded:', saveNm)
                 else:
                     raise Exception('\n\nCall Function: --> db_Handler.load()\nDatabase save file does not exist.')
@@ -979,3 +1063,6 @@ class db_Handler:
 # |      With the intent of easy use, and easy to understand.     |
 # |            Also designed to just look nice. :)                |
 # -----------------------------------------------------------------
+# Patch Notes for this version of the handler:
+# 1) Fixed an issue with userPW erroring out when loading save files, if the number began with 0.
+# 2) Finished 2 functions within the backup class. clearBackups() and compressBackups().
