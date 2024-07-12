@@ -1,14 +1,13 @@
-# A rebuilt version of the database handler class.
-#         | Only the handler class will be rebuilt here
-#         | All other functions that interact with the handler class will be rebuilt af
-#         | I've been having issues trying to map out how I want the handler to work with all other functions. So i said, fuck everything else, i'll rebuild those after and work around a good working hanlder
-# Use of instances will be used for each database
-
 # Ideas for settings:
 # max_allowsRows - A db can only have ? rows within it.
 # max_allowColumns - a db can only have ? columns within it.
 # CaseSensativityAmoungColumnNames=True
 # loadDBOnEachStartup = 'AAAA' or None(Doesn't load anything)
+userPw_ChangesEachSave = True # Default True
+decryptSaveOnLoad = False # Default False
+EncryptionKey='userPW'
+LoginKey = 'Taco'
+EncryptSaveFile = True
 
 #Grouped Files
 # 1) handler_showcase.py
@@ -24,7 +23,7 @@ import os, sys, shutil, random, time, hashlib, builtins, datetime, zipfile
 sys.set_int_max_str_digits(1000000)
 print('Current Path Set:', os.getcwd())
 os.chdir('App')
-print('Current Version: 0.1')
+print('Current Version: 0.1.2')
 
 
 
@@ -77,7 +76,7 @@ def generateNextIncrement():
     
 
 class db_Handler:
-    '''An extremely simple, but yet thought out hanlder. :)-'''
+    '''An extremely simple, but yet thought out handler. :)-'''
     def __init__(self) -> None:
         # Active Status, 
         self.info = [True]
@@ -126,7 +125,8 @@ class db_Handler:
     def create(self):
         '''Used to setup a database. Required if user accounts will be used.'''
         self.mkGlobalTempVars()
-        self.userPW = self.encryption.uniqueIDGen(maxKeyLength=50, password='UserPW', consistantOutput=False)
+        self.userPW = self.encryption.uniqueIDGen(maxKeyLength=50, password='EncryptionKey', consistantOutput=False)
+    
     class MaliciosActivityLogger:
         '''This class is only used/called when data between variables doesn't match and may be a sign of malicios activity.
         This class logs all calls to itself and will take precautions if malicios data is found depending from where it occured.'''
@@ -389,8 +389,9 @@ class db_Handler:
             pass
     
     class Encryption:
+        '''Encryption class. Used for encrypting and decrypting data.'''
         def __init__(self, handler):
-            self.hanlder = handler
+            self.handler = handler
 
         def VerifyPassword(self, input):
             '''Verify a password is valid and doesn\'t contain anyn characters that are not allowed.
@@ -401,8 +402,8 @@ class db_Handler:
             Retuns:
             - True: Password Meets Requirments
             - False: Password is invalid'''
-            allowed_chars = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # Excluded confusing characters
-            if any(char not in allowed_chars for char in input):
+            allowed_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"  # Excluded confusing characters
+            if any(char not in allowed_chars for char in str(input)):
                 return False
             return True
         
@@ -419,6 +420,7 @@ class db_Handler:
             \n-  -  Max for this var is: 10,000.
             \n- luckyNumber(int): A number you think is lucky. Some random number. Similar to password, but only numbers.
             \n- password(str): In progress.. Using a character password, a unique number is created and used in place of luckyNumber. The number is unique to character location whithin a string, what character is where, etc...
+            \n   -  If using EncryptionKey Variable, set password 'EncryptionKey' to use the key, or set password as globals()['EncryptionKey']
             \n- consistantOutput(bool): Disables the uniqueness used by time.time(), creating a consisting output
 
             \n
@@ -431,6 +433,8 @@ class db_Handler:
             \n1) No 2 chars next to eachother will be the same.
             '''
             # Check arguments:
+            if password == 'EncryptionKey':
+                password = globals()['EncryptionKey']
             if luckyNumber == None and password == None:
                 luckyNumber = random.randint(1, 50)
             if maxKeyLength > 10000:
@@ -484,8 +488,26 @@ class db_Handler:
                     else:
                         random.seed(time.time() - b3)
             
-            return keyOut[0:maxKeyLength-1] # Verify the length of the key is correct
+            return keyOut[1:maxKeyLength-1] # Verify the length of the key is correct
         
+        def getNewLineIndicators(self, input):
+            '''Gets the indexs of new line indicators within a string. Used for encryption and decryption.
+            
+            Returns:
+            - modified_input: The input with new line indicators removed
+            - newline_indexes: The indexes of the new line indicators within the input string'''
+            # Get indexs of new lines indicators
+            newline_indexes = [i for i, char in enumerate(input) if char == '\n']
+            # Remove indicators
+            modified_input = input.replace('\n', '')
+            return modified_input, newline_indexes
+
+        def reInsertNewLineIndicators(self, input, newline_indexes):
+            '''Reinserts new line indicators into a string.'''
+            for index in reversed(newline_indexes):
+                input = input[:index] + '\n' + input[index:]
+            return input
+
         def en(self, input, uniqueID, r=False, acc4decrywithIOverflow=False, debug=False, InvertedCount=False, maxLength=9, decrypt=False):
             '''Using an inputed string and unique number, we can scatter the actual input
             
@@ -514,11 +536,19 @@ class db_Handler:
                 uniqueID = int(uniqueID)
             except:
                 raise Exception('\n\nCall Function: --> Encryption.en()\n - uniqueID must be an integer.')
-            splitInput = [input[i:i+maxLength] for i in range(0, len(input), maxLength)]
+            modified_input, newline_indexes = self.getNewLineIndicators(input)
+            splitInput = [modified_input[i:i+maxLength] for i in range(0, len(modified_input), maxLength)]
             output = ''
             for chunk in splitInput:
+                # Remove \n in chunk, but remember where it was located, so we can add it back in after chunk is encrypted/decrypted
+                newLineIndex = None
+                if '\n' in chunk:
+                    chunk = chunk.replace('\n', '')
+                    newLineIndex = chunk.index('\n')
+                # Convert chunk to list
                 tmpList = list(chunk)
                 uniqueIDStr = str(uniqueID)
+                # Reverse uniqueIDStr
                 if InvertedCount:
                     uniqueIDStr = uniqueIDStr[::-1]
                 swapOperations = []
@@ -541,10 +571,16 @@ class db_Handler:
                         tmpList[i], tmpList[swapIndex] = tmpList[swapIndex], tmpList[i]
                     if debug:
                         print(f'Swapping {tmpList[i]} with {tmpList[swapIndex]} at indices {i} and {swapIndex}')
+                # Add \n back in
+                if newLineIndex is not None:
+                    tmpList.insert(newLineIndex, '\n')
+                
                 output += ''.join(tmpList)
-            return output
+            new_output = self.reInsertNewLineIndicators(output, newline_indexes)
+            return new_output
 
     class Edit:
+        '''Edit class. Used for editing the database. Adding, removing, and modifying data.'''
         def __init__(self, handler):
             self.handler = handler
         
@@ -677,7 +713,19 @@ class db_Handler:
             '''Set permissions for a column. Allows you to set permissions for a column, and who can read/write to it.'''
             pass
 
+        def encryptRow(self, row, uniqueID):
+            '''Encrypt a row. Password for encryption is stored within the saveFile for the database.
+            
+            Args:
+            - row: The row to encrypt
+            - uniqueID: The uniqueID to encrypt the row with
+            
+            Returns:
+            - Encrypted Row'''
+            pass
+    
     class Data:
+        '''Data class. Used for managing data within the database. Displaying, finding, and returning data.'''
         def __init__(self, handler):
             self.handler = handler
             
@@ -890,12 +938,15 @@ class db_Handler:
                 os.remove(file)
             
     class Save:
+        '''Database saving class.
+        \n - all(): Saves the entire database. This includes all data, rows/columns, and meta data.
+        \n - VariabledSave(): Used periodically to save important variables for stable runtime of handler.'''
         def __init__(self, handler):
             self.handler = handler
 
         def all(self):
             '''Saves the entire db instance. This includes all data, rows/columns, and meta data.'''
-            global lastDatabaseSaved
+            global lastDatabaseSaved, userPw_ChangesEachSave, EncryptSaveFile, LoginKey
             # You can save a database even if it's empty. Allows for an easy setup of hundreds of databases.
             # Vars saved: tag, columnStorage, listStorage, owner, knownUsers, permissions, allowedPermissions, userPW
 
@@ -921,19 +972,33 @@ class db_Handler:
 
                 # Then, Delete the save file
                 os.remove(saveNmBk)
-
+            
             # Now, we save the database.
             svList = ['columnStorage', 'listStorage', 'owner', 'knownUsers', 'permissions', 'allowedPermissions']
-            print(saveNm)
+            if EncryptSaveFile:
+                # Encryption of save file.
+                # Key for encryption, can be recreated by using the same password. Will be required for decryption.
+                print('Login key:', LoginKey)
+                out = str(self.handler.encryption.uniqueIDGen(maxKeyLength=50, password=str(LoginKey), consistantOutput=True))
+                print('ID:', out)
+            
             with open(saveNm, 'w') as f:
                 f.write('tag = '+str(self.handler.tag)+'\n')
                 for item in svList:
                     actual_value = getattr(self.handler, item)
-                    f.write(item + ' = ' + str(actual_value) +'\n')
-                f.write('userPW = "'+str(self.handler.userPW[1:])+'"\n')
+                    line = (item + ' = ' + str(actual_value) +'\n')
+                    f.write(self.handler.encryption.en(input=line, uniqueID=out))
+                if userPw_ChangesEachSave:
+                    line = ('userPW = "'+str(self.handler.encryption.uniqueIDGen(maxKeyLength=50, password='EncryptionKey', consistantOutput=False))+'"\n')
+                    f.write(self.handler.encryption.en(input=line, uniqueID=out))
+                else:
+                    line = ('userPW = "'+str(self.handler.userPW)+'"\n')
+                    f.write(self.handler.encryption.en(input=line, uniqueID=out))
+
                 f.write('')
                 f.close()
 
+            
             # All done!
             lastDatabaseSaved = saveNm
             print('Database saved as:', saveNm)
@@ -951,7 +1016,7 @@ class db_Handler:
             file.write('\nlastDatabaseSaved = {}'.format(lastDatabaseSaved))
             file.write('\nmALCount = {}'.format(mALCount))
             file.close()
-
+        
     def load(self, tag=None, excuse=[]):
         '''Loads data from a saved database. Requires this database instance to be empty.
         
@@ -968,7 +1033,16 @@ class db_Handler:
         - permissions
         - allowedPermissions
         - userPW'''
-
+        global LoginKey, decryptSaveOnLoad
+        SaveEnc = self.CheckIfSaveIsEncrypted(tag=tag)
+        # If password is specified, decrypt the save file first
+        if SaveEnc == True:
+            if self.CheckIfSaveIsEncrypted(tag=tag) == False:
+                raise Exception('\n\nCall Function: --> db_Handler.load()\nSave file is not encrypted. Cannot decrypt save file.')
+            # Encryption of save file.
+            # Key for encryption, can be recreated by using the same password. Will be required for decryption.
+            out = str(self.encryption.uniqueIDGen(maxKeyLength=50, password=str(LoginKey), consistantOutput=True))
+        
         # Check excusable variables
         allowedExcuses = ['columnStorage', 'listStorage', 'tag', 'owner', 'knownUsers', 'permissions', 'userLogged', 'allowedPermissions', 'userPW']
         for i in range(len(excuse)):
@@ -994,43 +1068,53 @@ class db_Handler:
                 # Check if file exists
                 if os.path.exists(saveNm):
                     # Load the database
+                    if decryptSaveOnLoad and SaveEnc == True:
+                        # Rewrite the save file with the decrypted data from variable (out)
+                        tmpData = ''
                     with open(saveNm, 'r') as f:
                         for line in f:
-                            # Get the value of the line
-                            value = line.split(' = ')[1]
-                            # Remove the '\n' at the end
-                            value = value.replace('\n', '')
-                            # Get the name of the line
-                            name = line.split(' = ')[0]
-                            # Remove the spaces at the end
-                            name = name.replace(' ', '')
-                            # Set the value to the database
+                            if SaveEnc == True:
+                                if 'tag =' not in line:
+                                    line = self.encryption.en(input=line, uniqueID=out, decrypt=True)
+                                tmpData += str(line)
+                            if ' = ' in line:
+                                # Get the value of the line
+                                value = line.split(' = ')[1]
+                                # Remove the '\n' at the end
+                                value = value.replace('\n', '')
+                                # Get the name of the line
+                                name = line.split(' = ')[0]
+                                # Remove the spaces at the end
+                                name = name.replace(' ', '')
+                                # Set the value to the database
 
-                            # Verify excuses before setting values
-                            if 'tag' not in excuse:
-                                if name == 'tag':
-                                    self.tag[0] = eval(value)
-                            if 'columnStorage' not in excuse:
-                                if name == 'columnStorage':
-                                    self.columnStorage = eval(value)
-                            if 'listStorage' not in excuse:
-                                if name == 'listStorage':
-                                    self.listStorage = eval(value)
-                            if 'owner' not in excuse:
-                                if name == 'owner':
-                                    self.owner = eval(value)
-                            if 'knownUsers' not in excuse:
-                                if name == 'knownUsers':
-                                    self.knownUsers = eval(value)
-                            if 'permissions' not in excuse:
-                                if name == 'permissions':
-                                    self.permissions = eval(value)
-                            if 'allowedPermissions' not in excuse:
-                                if name == 'allowedPermissions':
-                                    self.allowedPermissions = eval(value)
-                            if 'userPW' not in excuse:
-                                if name == 'userPW':
-                                    self.userPW = int(eval(value))
+                                # Verify excuses before setting values
+                                if 'tag' not in excuse:
+                                    if name == 'tag':
+                                        self.tag[0] = eval(value)
+                                if 'columnStorage' not in excuse:
+                                    if name == 'columnStorage':
+                                        self.columnStorage = eval(value)
+                                if 'listStorage' not in excuse:
+                                    if name == 'listStorage':
+                                        self.listStorage = eval(value)
+                                if 'owner' not in excuse:
+                                    if name == 'owner':
+                                        self.owner = eval(value)
+                                if 'knownUsers' not in excuse:
+                                    if name == 'knownUsers':
+                                        self.knownUsers = eval(value)
+                                if 'permissions' not in excuse:
+                                    if name == 'permissions':
+                                        self.permissions = eval(value)
+                                if 'allowedPermissions' not in excuse:
+                                    if name == 'allowedPermissions':
+                                        self.allowedPermissions = eval(value)
+                                if 'userPW' not in excuse:
+                                    if name == 'userPW':
+                                        self.userPW = int(eval(value))
+                            else:
+                                raise Exception('\n\nCall Function: --> db_Handler.load()\nInvalid data in save file. Unable to load database. Please check the save file for corruption.')
                     try:
                         # if the tag within the list (tag) is a list in a list, remove the within list.
                         # Fixes the issue of the tag being a list within a list.
@@ -1038,9 +1122,47 @@ class db_Handler:
                             self.tag = self.tag[0]
                     except:
                         pass
+                    if decryptSaveOnLoad and SaveEnc == True:
+                        f = open(saveNm, 'w')
+                        f.write(tmpData)
+                        f.close()
                     print('Database loaded:', saveNm)
                 else:
                     raise Exception('\n\nCall Function: --> db_Handler.load()\nDatabase save file does not exist.')
+    
+    def dataLoadingIssueDetection():
+        '''Scans a selected save file for errors or possible corruption. Called automatically before a database loads, and/or if a save file fails to load.
+        \n Other functions will be created to attempt repairs on common issues, if possible. If not, the user will be notified of the issue and possible ways to repair the save file.
+        \n Remember, this handler comes with a backup manager. So if all else fails, you can always restore a backup. Granted if your doing them on a regular basis.'''
+        pass
+
+    def CheckIfSaveIsEncrypted(self, tag=None):
+        '''This function checks wether a save file is encrypted or not. This is used to determine if the save file should requires a key for decrypting before loading.
+        Returns:
+        - True: Save file is encrypted
+        - False: Save file is not encrypted'''
+        # Check if tag is specified
+        if tag == None:
+            # If not, set the tag to the current database
+            tag = self.tag[0]
+        # Grab a line from the save file, The first line should be the tag, and not encrypted, the second line if not encrypted, should be a variable assinged to a value called columnStorage.
+        # Calculate the total number of lines in the file
+        with open('db_'+str(tag)+'.txt', 'r') as file:
+            total_lines = sum(1 for line in file)
+
+        # Calculate x (half of the total lines, rounded up)
+        x = -(-total_lines // 2)  # Using integer division rounding up
+
+        # Iterate through the file up to x lines
+        with open('db_'+str(tag)+'.txt', 'r') as file:
+            for i, line in enumerate(file):
+                if i >= x:
+                    break  # Stop after x lines
+                if 'columnStorage =' in line:
+                    return False
+                if 'listStorage =' in line:
+                    return False
+        return True
             
     class Meta:
         '''Add or Modify meta data of a database.'''
@@ -1063,6 +1185,3 @@ class db_Handler:
 # |      With the intent of easy use, and easy to understand.     |
 # |            Also designed to just look nice. :)                |
 # -----------------------------------------------------------------
-# Patch Notes for this version of the handler:
-# 1) Fixed an issue with userPW erroring out when loading save files, if the number began with 0.
-# 2) Finished 2 functions within the backup class. clearBackups() and compressBackups().
