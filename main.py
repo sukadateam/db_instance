@@ -2,12 +2,19 @@
 # max_allowsRows - A db can only have ? rows within it.
 # max_allowColumns - a db can only have ? columns within it.
 # CaseSensativityAmoungColumnNames=True
-# loadDBOnEachStartup = 'AAAA' or None(Doesn't load anything)
+bypassPasswordValidation = False # Default False
+CaseSensativityAmoungColumnNames = [True, 0] # Default True, if False, then 'Names' and 'names' are the same.
+'''index 0: Case Sensativity active?, index 1: 0 = LowerCase, 1 = UpperCase'''
 userPw_ChangesEachSave = True # Default True
 decryptSaveOnLoad = False # Default False
 EncryptionKey='userPW'
 LoginKey = 'Taco'
 EncryptSaveFile = True
+loadDBOnEachStartup = 'AAAA' # Database tag
+
+# Debug Settings:
+showArgsOnFunctionCall = True # Default False
+'''Create the instance, and you're ready to go! No need to call the load or create functions. They are automatically called. Only works for first instance creation.'''
 
 #Grouped Files
 # 1) handler_showcase.py
@@ -19,11 +26,11 @@ EncryptSaveFile = True
 #               Supported and backed by Dakota H.                #
 #                                                                #
 # -------------------------------------------------------------- #
-import os, sys, shutil, random, time, hashlib, builtins, datetime, zipfile
-sys.set_int_max_str_digits(1000000)
+import os, sys, shutil, random, time, hashlib, builtins, datetime, zipfile, uuid
+sys.set_int_max_str_digits(1000000) # Set the max digits for integers to 1,000,000
 print('Current Path Set:', os.getcwd())
-os.chdir('App')
-print('Current Version: 0.1.2')
+#os.chdir('App')
+print('Current Version: 0.1.3')
 
 
 
@@ -35,6 +42,7 @@ incrimatationCount='AAAA'
 usedCountList = []
 lastDatabaseSaved = None
 mALCount = 0 # Malicios Activity Logger Count
+databasesLoaded = []
 
 # Temp data (Moving to save file when that has been made/developed)
 def generateNextIncrement():
@@ -112,6 +120,10 @@ class db_Handler:
         self.maliciosActivityLogger = self.MaliciosActivityLogger(self)
         self.authentication = self.Authentication(self)
         self.backup = self.Backup(self)
+
+        if loadDBOnEachStartup != '':
+            self.load(loadDBOnEachStartup)
+            self.mkGlobalTempVars()
     
     def assignTemp(self, value):
         var = ('TempVar'+str(self.tag))
@@ -389,7 +401,10 @@ class db_Handler:
             pass
     
     class Encryption:
-        '''Encryption class. Used for encrypting and decrypting data.'''
+        '''Encryption class. Used for encrypting and decrypting data.
+        
+        Settings Implemented:
+        - showArgsOnFunctionCall'''
         def __init__(self, handler):
             self.handler = handler
 
@@ -402,12 +417,15 @@ class db_Handler:
             Retuns:
             - True: Password Meets Requirments
             - False: Password is invalid'''
-            allowed_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"  # Excluded confusing characters
-            if any(char not in allowed_chars for char in str(input)):
-                return False
+            global bypassPasswordValidation
+            if not bypassPasswordValidation:
+                allowed_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"  # Excluded confusing characters
+                if any(char not in allowed_chars for char in str(input)):
+                    return False
+                return True
             return True
         
-        def uniqueIDGen(self, inputLength=5, maxKeyLength=50, luckyNumber=None, password=None, consistantOutput=False):
+        def uniqueIDGen(self, inputLength=5, maxKeyLength=200, luckyNumber=None, password=None, consistantOutput=False):
             '''Creates a random Key for encryption. The longer the key, the stronger the encryption. 
             \n The design behind this generator is to create a key that is random, but also a nuicance to decrypt.
             \n
@@ -432,6 +450,10 @@ class db_Handler:
             \nNotes:
             \n1) No 2 chars next to eachother will be the same.
             '''
+            global showArgsOnFunctionCall
+            # Check settings:
+            if showArgsOnFunctionCall:
+                print('\n\nCall Function: --> Encryption.uniqueIDGen()\n - inputLength:', inputLength, '\n - maxKeyLength:', maxKeyLength, '\n - luckyNumber:', luckyNumber)
             # Check arguments:
             if password == 'EncryptionKey':
                 password = globals()['EncryptionKey']
@@ -447,47 +469,106 @@ class db_Handler:
 
             # Validate and process password
             if password:
+                # Verify password is valid
                 if not self.VerifyPassword(password):
                     raise ValueError("password contains invalid characters.")
                 # Use hashing to generate a unique number from password
                 hash_object = hashlib.sha256(password.encode()) 
+                # Convert the hash to an integer
                 experimental_number = int(hash_object.hexdigest(), 16)
+                # Random the seed
                 random.seed(experimental_number)
                 luckyNumber = experimental_number
             else:
                 random.seed(luckyNumber)
-
+            # Randomize how long the key will be
             mxSize = random.randint(maxKeyLength // 2, maxKeyLength)
+            # Add inconsistency to the key
             if not consistantOutput:
                 random.seed(time.time())
             else:
                 random.seed(0)
-            keyOut = ' '
+            keyOut = ' ' # Space is removed before returning the key
+            # Generate the key
             for gen in range(mxSize):
                 while True:
-                    new_key = str(random.randint(0, inputLength))
+                    # Select next number for the key
+                    if not consistantOutput:
+                        # Generate 15 random numbers into a list:
+                        rList = []
+                        for i in range(15):
+                            rList.append(random.randint(0, 9))
+                        # Add all the numbers together
+                        new_key = 0
+                        for num in rList:
+                            new_key += num
+                        # Divide the sum by the length of the list
+                        new_key = new_key // len(rList)
+                        # Multiple by maxKeyLength
+                        new_key = str(new_key * maxKeyLength)
+                        # Select the a random digit
+                        new_key = int(new_key[random.randint(0, len(new_key)-1)])
+                        random.seed(new_key)
+                        new_key = random.randint(0, luckyNumber)
+                    else:
+                        new_key = random.randint(0, luckyNumber)
+                    # Ensure no 2 chars next to eachother are the same
                     if keyOut[-1] == new_key:
                         continue
                     else:
                         break
-                keyOut += new_key
+                # Add the new char to the key
+                keyOut += str(new_key)
+                # Seed the random number generator with a random number
                 random.seed(random.randint(0, gen))
+                if not consistantOutput:
+                    # Get the uuid of the current time string
+                    uuid_str = str(uuid.uuid5(uuid.NAMESPACE_DNS, str(time.time())))
+                    # Give each char in uuid a unique number and save each number to a list.
+                    uuid_list = []
+                    for char in uuid_str:
+                        uuid_list.append(str(ord(char)))
+                    # Randomize the list
+                    random.shuffle(uuid_list)
+                    # Create a random value. Then run through the list and alternate between adding, subtracting, and multiplying the value by the list value.
+                    random_value = random.randint(0, 100)
+                    for value in uuid_list:
+                        random_value += int(value)
+                        random_value -= int(value)
+                        random_value *= int(value)
+                    # Seed the random value
+                    random.seed(random_value)
+                    # Generate a new random value
+                    random_value = random.randint(0, 100)
+
+                # Add more inconsistency to the key
                 if not consistantOutput:
                     b1 = int(random.randint(1, int(time.time())))
                 else:
                     b1 = int(random.randint(0, luckyNumber))
+                # More math
                 b2 = int(random.randint(0, luckyNumber))
+                # Even more math
                 random.seed((int(b1) + int(b2)))
                 b3 = random.randint(0, 100)
                 b4 = random.randint(0, 3)
-                if not consistantOutput:
-                    if b4 == 0:
-                        random.seed(time.time() * b3)
-                    elif b4 == 1:
-                        random.seed(time.time() + b3)
-                    else:
-                        random.seed(time.time() - b3)
-            
+                # Add even more inconsistency
+                try:
+                    with open('/dev/hwrng', 'rb') as f:
+                        # Read 4 bytes from hardware RNG
+                        hw_seed = f.read(4)
+                        # Convert bytes to an integer
+                        seed = int.from_bytes(hw_seed, 'big')
+                        random.seed(seed)
+                except:
+                    if not consistantOutput:
+                        if b4 == 0:
+                            random.seed(time.time() * b3)
+                        elif b4 == 1:
+                            random.seed(time.time() + b3)
+                        else:
+                            random.seed(time.time() - b3)
+            # Return the key
             return keyOut[1:maxKeyLength-1] # Verify the length of the key is correct
         
         def getNewLineIndicators(self, input):
@@ -496,9 +577,14 @@ class db_Handler:
             Returns:
             - modified_input: The input with new line indicators removed
             - newline_indexes: The indexes of the new line indicators within the input string'''
+            global showArgsOnFunctionCall
+            # Check settings
+            if showArgsOnFunctionCall:
+                print('\n\nCall Function: --> Encryption.getNewLineIndicators()\n - input:', input)
             # Get indexs of new lines indicators
             newline_indexes = [i for i, char in enumerate(input) if char == '\n']
             # Remove indicators
+            input = str(input)
             modified_input = input.replace('\n', '')
             return modified_input, newline_indexes
 
@@ -508,7 +594,60 @@ class db_Handler:
                 input = input[:index] + '\n' + input[index:]
             return input
 
-        def en(self, input, uniqueID, r=False, acc4decrywithIOverflow=False, debug=False, InvertedCount=False, maxLength=9, decrypt=False):
+        def bullshitEncrypt(self, input, uniqueID, strength=168):
+            '''Does really confusing stuff. This is called bullshit encryption. Once bullshitted, it's hard to un-bullshit without the 'bullshitDecrypt' function. Requires the encryption and decryption to occur on the same device. As device specific data is used to encrypt the data.'''
+            # Check settings
+            global bypassPasswordValidation, showArgsOnFunctionCall
+            if showArgsOnFunctionCall:
+                print('\n\nCall Function: --> Encryption.bullshitEncrypt()\n - input:', input, '\n - uniqueID:', uniqueID, '\n - strength:', strength)
+            import platform
+            networkName = platform.node()
+            wasEnabled=False
+            if bypassPasswordValidation:
+                wasEnabled = True
+            bypassPasswordValidation = True # Bypass password validation, since networkName may contain invalid characters.
+            # Create id with networkName
+            networkName = db_Handler.Encryption.uniqueIDGen(self, maxKeyLength=strength, password=str(uniqueID)+networkName, consistantOutput=True)
+            # Encrypt
+            input = db_Handler.Encryption.en(self, input=input, uniqueID=networkName, decrypt=False)
+            # Generate ConsistantKey with uniqueID
+            uniqueIDNew = db_Handler.Encryption.uniqueIDGen(self, maxKeyLength=strength, password=str(uniqueID), consistantOutput=True)
+            # Encrypt
+            input = db_Handler.Encryption.en(self, input=input, uniqueID=uniqueIDNew, decrypt=False)
+            # Encrypt Again, but with original uniqueID
+            input = db_Handler.Encryption.en(self, input=input, uniqueID=uniqueID, decrypt=False)
+            if not wasEnabled:
+                bypassPasswordValidation = False # Reset back to False
+            return input
+        
+        def bullshitDecrypt(self, input, uniqueID, strength=168):
+            '''Use me to un-bullshit the bullshit. I'm the un-bullshitter.'''
+            global bypassPasswordValidation, showArgsOnFunctionCall
+            # Check settings
+            if showArgsOnFunctionCall:
+                print('\n\nCall Function: --> Encryption.bullshitDecrypt()\n - input:', input, '\n - uniqueID:', uniqueID, '\n - strength:', strength)
+            wasEnabled=False
+            if bypassPasswordValidation:
+                wasEnabled = True
+            bypassPasswordValidation = True # Bypass password validation, since networkName may contain invalid characters.
+            import platform
+            networkName = platform.node()
+
+            # Generate ConsistantKey with uniqueID
+            uniqueIDNew = db_Handler.Encryption.uniqueIDGen(self, maxKeyLength=strength, password=str(uniqueID), consistantOutput=True)
+            # Decrypt, but with original uniqueID
+            input = db_Handler.Encryption.en(self, input=input, uniqueID=uniqueID, decrypt=True)
+            # Decrypt again, but with new uniqueID
+            input = db_Handler.Encryption.en(self, input=input, uniqueID = uniqueIDNew, decrypt=True)
+            # Create id with networkName
+            networkName = db_Handler.Encryption.uniqueIDGen(self, maxKeyLength=strength, password=str(uniqueID)+networkName, consistantOutput=True)
+            # Decrypt
+            input = db_Handler.Encryption.en(self, input=input, uniqueID=networkName, decrypt=True)
+            if not wasEnabled:
+                bypassPasswordValidation = False # Reset back to False
+            return input
+        
+        def en(self, input, uniqueID, r=False, acc4decrywithIOverflow=False, debug=False, InvertedCount=False, maxLength=100, decrypt=False, shuffletmpList=False):
             '''Using an inputed string and unique number, we can scatter the actual input
             
             Args:
@@ -523,6 +662,7 @@ class db_Handler:
             - InvertedCount: Normal I Usage: 0.1.2.3.0... Inverted 3.2.1.0.3...
             - maxLength: How long each bit can be. Max 10, Min 2.
             - decrypt: If the Input, has already been encrypted, and you want to decrypt it. Set to True.
+            - shuffletmpList: Randomize the list using the uniqueID. DO NOT USE AT ALL. IT'S NO WORK.
                     
             Use Example:
             - encrypting: en('Hello', 1234)
@@ -532,6 +672,10 @@ class db_Handler:
             Returns:
             - Encrypted output
             '''
+            global showArgsOnFunctionCall
+            # Check settings
+            if showArgsOnFunctionCall:
+                print('\n\nCall Function: --> Encryption.en()\n - input:', input, '\n - uniqueID:', uniqueID, '\n - r:', r, '\n - acc4decrywithIOverflow:', acc4decrywithIOverflow, '\n - debug:', debug, '\n - InvertedCount:', InvertedCount, '\n - maxLength:', maxLength, '\n - decrypt:', decrypt, '\n - shuffletmpList:', shuffletmpList)
             try:
                 uniqueID = int(uniqueID)
             except:
@@ -540,6 +684,7 @@ class db_Handler:
             splitInput = [modified_input[i:i+maxLength] for i in range(0, len(modified_input), maxLength)]
             output = ''
             for chunk in splitInput:
+                
                 # Remove \n in chunk, but remember where it was located, so we can add it back in after chunk is encrypted/decrypted
                 newLineIndex = None
                 if '\n' in chunk:
@@ -571,10 +716,29 @@ class db_Handler:
                         tmpList[i], tmpList[swapIndex] = tmpList[swapIndex], tmpList[i]
                     if debug:
                         print(f'Swapping {tmpList[i]} with {tmpList[swapIndex]} at indices {i} and {swapIndex}')
+                
+                if shuffletmpList:
+                    # randomize the list using the uniqueID.
+                    # Shuffle List
+                    if not decrypt:
+                        random.seed(uniqueID)
+                        random.shuffle(tmpList)
+                    # Unshuffle List
+                    if decrypt:
+                        random.seed(uniqueID)
+                        # Generate the same sequence of shuffle operations
+                        shuffle_operations = list(range(len(tmpList)))
+                        random.shuffle(shuffle_operations)
+                        
+                        # Reverse the shuffle operations
+                        unshuffled_list = [None] * len(tmpList)
+                        for original_index, shuffled_index in enumerate(shuffle_operations):
+                            unshuffled_list[shuffled_index] = tmpList[original_index]
+                        tmpList = unshuffled_list
+                
                 # Add \n back in
                 if newLineIndex is not None:
                     tmpList.insert(newLineIndex, '\n')
-                
                 output += ''.join(tmpList)
             new_output = self.reInsertNewLineIndicators(output, newline_indexes)
             return new_output
@@ -596,6 +760,7 @@ class db_Handler:
             
             Notes:
             All rows for this column will be empty. Use mods.EmptyEntryFill() to fill empty values in rows.'''
+            global CaseSensativityAmoungColumnNames
             if type(column) == str:
                 self.handler.columnStorage.append(column)
                 if AutoFillEmptyRows:
@@ -815,8 +980,8 @@ class db_Handler:
                 else:
                     print(rowsNeat)
             
-    # Reused from my old handler. Why change something that works? :)- Did make a few changes to it tho. :laugh:
     def space(self, var=None, max_length=10, hide=False, return_ShortenNotice=False, centerText=False):
+        '''Reused from my old handler. Why change something that works? :)- Did make a few changes to it tho. :laugh:discord:id:9620981493924'''
         var = str(var)
         if isinstance(var, str):
             if centerText:
@@ -857,10 +1022,7 @@ class db_Handler:
         def __init__(self, handler):
             self.handler = handler
         
-        def tireRotationsMpH(speed_mph = 400,
-            tire_diameter_inches = 25.5,
-            feet_per_mile = 5280,
-            minutes_per_hour = 60):
+        def tireRotationsMpH(speed_mph = 400, tire_diameter_inches = 25.5, feet_per_mile = 5280, minutes_per_hour = 60):
             '''Calculate tire rotations per minute based on tire diameter and speed in miles per hour. Used to calculate RPM required from an electric motor to achieve a certain speed.'''
             import math
 
@@ -871,6 +1033,246 @@ class db_Handler:
             rpm = speed_feet_per_minute / circumference_feet
 
             print(f'A tire with a diameter of {tire_diameter_inches} inches will rotate {rpm:.2f} times per minute; or be the rpm motor requirements for an illegal moped, to travel at a speed of {speed_mph} mph.')
+            return rpm
+        class SpeedPerHourConversion:
+            '''Convert all types of speeds to miles per hour. Ex: 100 km/h to mph
+            list Of All Speeds:
+            - km/h
+            - m/s
+            - ft/s
+            - mph
+            - knots
+            - mach
+            - speed of light
+            - speed of sound
+            - speed of a snail
+            - speed of a cheetah
+            Note: I did not include converting a speed to the same speed. That would be pointless. So don't think I forgot, duhhhh.
+            '''
+            class kilometerPerHour:
+                def metersPerSecond(speed):
+                    '''Converts km/h to m/s.'''
+                    return speed / 3.6
+                def feetPerSecond(speed):
+                    '''Converts km/h to ft/s.'''
+                    return speed / 1.09728
+                def milesPerHour(speed):
+                    '''Converts km/h to mph.'''
+                    return speed / 1.60934
+                def knots(speed):
+                    '''Converts km/h to knots.'''
+                    return speed / 1.852
+                def mach(speed):
+                    '''Converts km/h to mach.'''
+                    return speed / 1234.8
+                def speedOfLight(speed):
+                    '''Converts km/h to the speed of light.'''
+                    return speed / 1079252848.8
+                def speedOfSound(speed):
+                    '''Converts km/h to the speed of sound.'''
+                    return speed / 1234.8
+                def speedOfSnail(speed):
+                    '''Converts km/h to the speed of a snail.'''
+                    return speed / 0.000166667
+                def speedOfCheetah(speed):
+                    '''Converts km/h to the speed of a cheetah.'''
+                    return speed / 109.728
+            class metersPerSecond:
+                def feetPerSecond(speed):
+                    '''Converts m/s to ft/s.'''
+                    return speed * 3.28084
+                def metersPerSecond(speed):
+                    # Already in meters per second
+                    return speed
+                def milesPerHour(speed):
+                    '''Converts m/s to mph.'''
+                    return speed * 2.23694
+                def knots(speed):
+                    '''Converts m/s to knots.'''
+                    return speed * 1.94384
+                def mach(speed):
+                    '''Converts m/s to mach.'''
+                    return speed / 343.592
+                def speedOfLight(speed):
+                    '''Converts m/s to the speed of light.'''
+                    return speed / 299792458
+                def speedOfSound(speed):
+                    '''Converts m/s to the speed of sound.'''
+                    return speed / 343.592
+                def speedOfSnail(speed):
+                    '''Converts m/s to the speed of a snail.'''
+                    return speed * 0.000277778
+                def speedOfCheetah(speed):
+                    '''Converts m/s to the speed of a cheetah.'''
+                    return speed * 2.23694
+            class FeetPerSecond:
+                def feet_to_kmh(value):
+                    return value * 1.09728
+                def feet_to_ms(value):
+                    return value * 0.3048
+                def feet_to_fts(value):
+                    return value
+                def feet_to_mph(value):
+                    return value * 0.681818
+                def feet_to_knots(value):
+                    return value * 0.592484
+                def feet_to_mach(value):
+                    return value / 1125
+                def feet_to_speed_of_light(value):
+                    return value / 983571056
+                def feet_to_speed_of_sound(value):
+                    return value / 1125
+                def feet_to_speed_of_snail(value):
+                    return value / 0.013
+                def feet_to_speed_of_cheetah(value):
+                    return value / 88
+            class MilesPerHour:
+                def mph_to_kmh(value):
+                    return value * 1.60934
+                def mph_to_ms(value):
+                    return value * 0.44704
+                def mph_to_fts(value):
+                    return value * 1.46667
+                def mph_to_mph(value):
+                    return value
+                def mph_to_knots(value):
+                    return value * 0.868976
+                def mph_to_mach(value):
+                    return value / 761.207
+                def mph_to_speed_of_light(value):
+                    return value / 670616629
+                def mph_to_speed_of_sound(value):
+                    return value / 761.207
+                def mph_to_speed_of_snail(value):
+                    return value / 0.001
+                def mph_to_speed_of_cheetah(value):
+                    return value / 70
+            class Knots:
+                def knots_to_kmh(value):
+                    return value * 1.852
+                def knots_to_ms(value):
+                    return value * 0.514444
+                def knots_to_fts(value):
+                    return value * 1.68781
+                def knots_to_mph(value):
+                    return value * 1.15078
+                def knots_to_knots(value):
+                    return value
+                def knots_to_mach(value):
+                    return value / 661.470
+                def knots_to_speed_of_light(value):
+                    return value / 582749912
+                def knots_to_speed_of_sound(value):
+                    return value / 661.470
+                def knots_to_speed_of_snail(value):
+                    return value / 0.000911344
+                def knots_to_speed_of_cheetah(value):
+                    return value / 59.675
+            class Mach:
+                def mach_to_kmh(value):
+                    return value * 1234.8
+                def mach_to_ms(value):
+                    return value * 343.592
+                def mach_to_fts(value):
+                    return value * 1125
+                def mach_to_mph(value):
+                    return value * 761.207
+                def mach_to_knots(value):
+                    return value * 661.470
+                def mach_to_mach(value):
+                    return value
+                def mach_to_speed_of_light(value):
+                    return value / 874030
+                def mach_to_speed_of_sound(value):
+                    return value
+                def mach_to_speed_of_snail(value):
+                    return value / 0.001364
+                def mach_to_speed_of_cheetah(value):
+                    return value / 114.5
+            class SpeedOfLight:
+                def speed_of_light_to_kmh(value):
+                    return value * 1079252848.8
+                def speed_of_light_to_ms(value):
+                    return value * 299792458
+                def speed_of_light_to_fts(value):
+                    return value * 983571056
+                def speed_of_light_to_mph(value):
+                    return value * 670616629
+                def speed_of_light_to_knots(value):
+                    return value * 582749912
+                def speed_of_light_to_mach(value):
+                    return value * 874030
+                def speed_of_light_to_speed_of_light(value):
+                    return value
+                def speed_of_light_to_speed_of_sound(value):
+                    return value * 0.34029
+                def speed_of_light_to_speed_of_snail(value):
+                    return value / 299792458
+                def speed_of_light_to_speed_of_cheetah(value):
+                    return value / 249448.5
+            class SpeedOfSound:
+                def speed_of_sound_to_kmh(value):
+                    return value * 1234.8
+                def speed_of_sound_to_ms(value):
+                    return value * 343.592
+                def speed_of_sound_to_fts(value):
+                    return value * 1125
+                def speed_of_sound_to_mph(value):
+                    return value * 761.207
+                def speed_of_sound_to_knots(value):
+                    return value * 661.470
+                def speed_of_sound_to_mach(value):
+                    return value
+                def speed_of_sound_to_speed_of_light(value):
+                    return value * 0.34029
+                def speed_of_sound_to_speed_of_sound(value):
+                    return value
+                def speed_of_sound_to_speed_of_snail(value):
+                    return value / 343.592
+                def speed_of_sound_to_speed_of_cheetah(value):
+                    return value / 28.8
+            class SpeedOfSnail:
+                def speed_of_snail_to_kmh(value):
+                    return value * 0.000166667
+                def speed_of_snail_to_ms(value):
+                    return value * 0.0000462963
+                def speed_of_snail_to_fts(value):
+                    return value * 0.000152587
+                def speed_of_snail_to_mph(value):
+                    return value * 0.000104167
+                def speed_of_snail_to_knots(value):
+                    return value * 0.0000907895
+                def speed_of_snail_to_mach(value):
+                    return value * 0.001364
+                def speed_of_snail_to_speed_of_light(value):
+                    return value * 299792458
+                def speed_of_snail_to_speed_of_sound(value):
+                    return value * 343.592
+                def speed_of_snail_to_speed_of_snail(value):
+                    return value
+                def speed_of_snail_to_speed_of_cheetah(value):
+                    return value / 8400
+            class SpeedOfCheetah:
+                def speed_of_cheetah_to_kmh(value):
+                    return value * 109.728
+                def speed_of_cheetah_to_ms(value):
+                    return value * 30.48
+                def speed_of_cheetah_to_fts(value):
+                    return value * 100
+                def speed_of_cheetah_to_mph(value):
+                    return value * 68.1818
+                def speed_of_cheetah_to_knots(value):
+                    return value * 59.2484
+                def speed_of_cheetah_to_mach(value):
+                    return value * 114.5
+                def speed_of_cheetah_to_speed_of_light(value):
+                    return value * 249448.5
+                def speed_of_cheetah_to_speed_of_sound(value):
+                    return value * 28.8
+                def speed_of_cheetah_to_speed_of_snail(value):
+                    return value * 8400
+                def speed_of_cheetah_to_speed_of_cheetah(value):
+                    return value
 
     class Backup:
         '''Saving the database, creates a backup each time. The backup is saved in a folder called "Backups". This class is used to manage the backups.'''
@@ -1033,102 +1435,108 @@ class db_Handler:
         - permissions
         - allowedPermissions
         - userPW'''
-        global LoginKey, decryptSaveOnLoad
-        SaveEnc = self.CheckIfSaveIsEncrypted(tag=tag)
-        # If password is specified, decrypt the save file first
-        if SaveEnc == True:
-            if self.CheckIfSaveIsEncrypted(tag=tag) == False:
-                raise Exception('\n\nCall Function: --> db_Handler.load()\nSave file is not encrypted. Cannot decrypt save file.')
-            # Encryption of save file.
-            # Key for encryption, can be recreated by using the same password. Will be required for decryption.
-            out = str(self.encryption.uniqueIDGen(maxKeyLength=50, password=str(LoginKey), consistantOutput=True))
-        
-        # Check excusable variables
-        allowedExcuses = ['columnStorage', 'listStorage', 'tag', 'owner', 'knownUsers', 'permissions', 'userLogged', 'allowedPermissions', 'userPW']
-        for i in range(len(excuse)):
-            if excuse[i] not in allowedExcuses:
-                raise Exception('\n\nCall Function: --> db_Handler.load()\nInvalid excuse given. Excuse must be in the list of allowed excuses.')
-        
-        if tag != None:
-            # Set the tag to the one given
-            self.tag = [tag]
-        elif tag == None and lastDatabaseSaved != None:
-            # Set the tag to the last saved database
-            self.tag = [lastDatabaseSaved]
+        global LoginKey, decryptSaveOnLoad, databasesLoaded
+        # if db save file exists, then check if it's encrypted
+        if os.path.exists('db_'+str(tag)+'.txt') == False:
+            print('Ignoring load, as save file does not exist.')
         else:
-            raise Exception('\n\nCall Function: --> db_Handler.load()\nNo tag given, and no database has been saved yet. Unable to automatically determine what to load.')
-        
-        if self.columnStorage != [] or self.listStorage != []:
-            raise Exception('\n\nCall Function: --> db_Handler.load()\nData already exists in this database. Cannot load data into an existing database.')
-        else:
-            # Check if columnStorage and listStorage are empty
-            if self.columnStorage == [] and self.listStorage == []:
-                # Make the name for our save file
-                saveNm='db_'+str(self.tag[0])+'.txt'
-                # Check if file exists
-                if os.path.exists(saveNm):
-                    # Load the database
-                    if decryptSaveOnLoad and SaveEnc == True:
-                        # Rewrite the save file with the decrypted data from variable (out)
-                        tmpData = ''
-                    with open(saveNm, 'r') as f:
-                        for line in f:
-                            if SaveEnc == True:
-                                if 'tag =' not in line:
-                                    line = self.encryption.en(input=line, uniqueID=out, decrypt=True)
-                                tmpData += str(line)
-                            if ' = ' in line:
-                                # Get the value of the line
-                                value = line.split(' = ')[1]
-                                # Remove the '\n' at the end
-                                value = value.replace('\n', '')
-                                # Get the name of the line
-                                name = line.split(' = ')[0]
-                                # Remove the spaces at the end
-                                name = name.replace(' ', '')
-                                # Set the value to the database
-
-                                # Verify excuses before setting values
-                                if 'tag' not in excuse:
-                                    if name == 'tag':
-                                        self.tag[0] = eval(value)
-                                if 'columnStorage' not in excuse:
-                                    if name == 'columnStorage':
-                                        self.columnStorage = eval(value)
-                                if 'listStorage' not in excuse:
-                                    if name == 'listStorage':
-                                        self.listStorage = eval(value)
-                                if 'owner' not in excuse:
-                                    if name == 'owner':
-                                        self.owner = eval(value)
-                                if 'knownUsers' not in excuse:
-                                    if name == 'knownUsers':
-                                        self.knownUsers = eval(value)
-                                if 'permissions' not in excuse:
-                                    if name == 'permissions':
-                                        self.permissions = eval(value)
-                                if 'allowedPermissions' not in excuse:
-                                    if name == 'allowedPermissions':
-                                        self.allowedPermissions = eval(value)
-                                if 'userPW' not in excuse:
-                                    if name == 'userPW':
-                                        self.userPW = int(eval(value))
-                            else:
-                                raise Exception('\n\nCall Function: --> db_Handler.load()\nInvalid data in save file. Unable to load database. Please check the save file for corruption.')
-                    try:
-                        # if the tag within the list (tag) is a list in a list, remove the within list.
-                        # Fixes the issue of the tag being a list within a list.
-                        if type(self.tag[0]) == list:
-                            self.tag = self.tag[0]
-                    except:
-                        pass
-                    if decryptSaveOnLoad and SaveEnc == True:
-                        f = open(saveNm, 'w')
-                        f.write(tmpData)
-                        f.close()
-                    print('Database loaded:', saveNm)
+            SaveEnc = self.CheckIfSaveIsEncrypted(tag=tag)
+            # If password is specified, decrypt the save file first
+            if SaveEnc == True:
+                if self.CheckIfSaveIsEncrypted(tag=tag) == False:
+                    raise Exception('\n\nCall Function: --> db_Handler.load()\nSave file is not encrypted. Cannot decrypt save file.')
+                # Encryption of save file.
+                # Key for encryption, can be recreated by using the same password. Will be required for decryption.
+                out = str(self.encryption.uniqueIDGen(maxKeyLength=50, password=str(LoginKey), consistantOutput=True))
+            
+                # Check excusable variables
+                allowedExcuses = ['columnStorage', 'listStorage', 'tag', 'owner', 'knownUsers', 'permissions', 'userLogged', 'allowedPermissions', 'userPW']
+                for i in range(len(excuse)):
+                    if excuse[i] not in allowedExcuses:
+                        raise Exception('\n\nCall Function: --> db_Handler.load()\nInvalid excuse given. Excuse must be in the list of allowed excuses.')
+                
+                if tag != None:
+                    # Set the tag to the one given
+                    self.tag = [tag]
+                elif tag == None and lastDatabaseSaved != None:
+                    # Set the tag to the last saved database
+                    self.tag = [lastDatabaseSaved]
                 else:
-                    raise Exception('\n\nCall Function: --> db_Handler.load()\nDatabase save file does not exist.')
+                    raise Exception('\n\nCall Function: --> db_Handler.load()\nNo tag given, and no database has been saved yet. Unable to automatically determine what to load.')
+                
+                if self.columnStorage != [] or self.listStorage != []:
+                    raise Exception('\n\nCall Function: --> db_Handler.load()\nData already exists in this database. Cannot load data into an existing database.')
+                else:
+                    # Check if columnStorage and listStorage are empty
+                    if self.columnStorage == [] and self.listStorage == []:
+                        # Make the name for our save file
+                        saveNm='db_'+str(self.tag[0])+'.txt'
+                        # Check if file exists
+                        if os.path.exists(saveNm):
+                            # Load the database
+                            if decryptSaveOnLoad and SaveEnc == True:
+                                # Rewrite the save file with the decrypted data from variable (out)
+                                tmpData = ''
+                            with open(saveNm, 'r') as f:
+                                for line in f:
+                                    if SaveEnc == True:
+                                        if 'tag =' not in line:
+                                            line = self.encryption.en(input=line, uniqueID=out, decrypt=True)
+                                        if decryptSaveOnLoad:
+                                            tmpData += str(line)
+                                    if ' = ' in line:
+                                        # Get the value of the line
+                                        value = line.split(' = ')[1]
+                                        # Remove the '\n' at the end
+                                        value = value.replace('\n', '')
+                                        # Get the name of the line
+                                        name = line.split(' = ')[0]
+                                        # Remove the spaces at the end
+                                        name = name.replace(' ', '')
+                                        # Set the value to the database
+
+                                        # Verify excuses before setting values
+                                        if 'tag' not in excuse:
+                                            if name == 'tag':
+                                                self.tag[0] = eval(value)
+                                        if 'columnStorage' not in excuse:
+                                            if name == 'columnStorage':
+                                                self.columnStorage = eval(value)
+                                        if 'listStorage' not in excuse:
+                                            if name == 'listStorage':
+                                                self.listStorage = eval(value)
+                                        if 'owner' not in excuse:
+                                            if name == 'owner':
+                                                self.owner = eval(value)
+                                        if 'knownUsers' not in excuse:
+                                            if name == 'knownUsers':
+                                                self.knownUsers = eval(value)
+                                        if 'permissions' not in excuse:
+                                            if name == 'permissions':
+                                                self.permissions = eval(value)
+                                        if 'allowedPermissions' not in excuse:
+                                            if name == 'allowedPermissions':
+                                                self.allowedPermissions = eval(value)
+                                        if 'userPW' not in excuse:
+                                            if name == 'userPW':
+                                                self.userPW = int(eval(value))
+                                    else:
+                                        raise Exception('\n\nCall Function: --> db_Handler.load()\nInvalid data in save file. Unable to load database. Please check the save file for corruption.')
+                            try:
+                                # if the tag within the list (tag) is a list in a list, remove the within list.
+                                # Fixes the issue of the tag being a list within a list.
+                                if type(self.tag[0]) == list:
+                                    self.tag = self.tag[0]
+                            except:
+                                pass
+                            if decryptSaveOnLoad and SaveEnc == True:
+                                f = open(saveNm, 'w')
+                                f.write(tmpData)
+                                f.close()
+                            databasesLoaded.append(self.tag[0])
+                            print('Database loaded:', saveNm)
+                        else:
+                            raise Exception('\n\nCall Function: --> db_Handler.load()\nDatabase save file does not exist.')
     
     def dataLoadingIssueDetection():
         '''Scans a selected save file for errors or possible corruption. Called automatically before a database loads, and/or if a save file fails to load.
@@ -1185,3 +1593,6 @@ class db_Handler:
 # |      With the intent of easy use, and easy to understand.     |
 # |            Also designed to just look nice. :)                |
 # -----------------------------------------------------------------
+# Patch Notes for this version of the handler: 0.1.3
+# 1) Added new setting: loadDBOnEachStartup
+    # - Simplifies the process of loading a database on each startup.
