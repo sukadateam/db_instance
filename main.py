@@ -3,14 +3,14 @@
 # max_allowColumns - a db can only have ? columns within it.
 # CaseSensativityAmoungColumnNames=True
 bypassPasswordValidation = False # Default False
-CaseSensativityAmoungColumnNames = [True, 0] # Default True, if False, then 'Names' and 'names' are the same.
-'''index 0: Case Sensativity active?, index 1: 0 = LowerCase, 1 = UpperCase'''
+CaseSensativityAmoungColumnNames = [True] # Default True, if False, then 'Names' and 'names' are the same.
+'''Case Sensativity active? 'Names' and 'names' are the same if True. If False, then they are seen as different.'''
 userPw_ChangesEachSave = True # Default True
 decryptSaveOnLoad = False # Default False
 EncryptionKey='userPW'
 LoginKey = 'Taco'
-EncryptSaveFile = True
-loadDBOnEachStartup = 'AAAA' # Database tag
+EncryptSaveFile = False
+loadDBOnEachStartup = '' # Database tag. If == '', will ignore. Default ''
 
 # Debug Settings:
 showArgsOnFunctionCall = True # Default False
@@ -31,6 +31,7 @@ sys.set_int_max_str_digits(1000000) # Set the max digits for integers to 1,000,0
 print('Current Path Set:', os.getcwd())
 #os.chdir('App')
 print('Current Version: 0.1.3')
+print(f"Python Version: {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}.{sys.version_info.releaselevel}")
 
 
 
@@ -134,10 +135,17 @@ class db_Handler:
     def mkGlobalTempVars(self):
         newVar = ('TempVar'+str(self.tag))
         globals()[newVar] = None
-    def create(self):
-        '''Used to setup a database. Required if user accounts will be used.'''
+    def create(self, tag=None):
+        '''Used to setup a database. Required if user accounts will be used.
+        \nArgs:
+        \n - tag(str): The tag of the database. If not set, a random tag will be generated.'''
         self.mkGlobalTempVars()
+        if tag != None:
+            self.tag = tag
         self.userPW = self.encryption.uniqueIDGen(maxKeyLength=50, password='EncryptionKey', consistantOutput=False)
+    def makeRowTmpFile(self):
+        '''Creates a temporary file for rows.'''
+        globals()['TempRowFile'+str(self.tag)] = open('TempRowFile'+str(self.tag)+'.txt', 'w')
     
     class MaliciosActivityLogger:
         '''This class is only used/called when data between variables doesn't match and may be a sign of malicios activity.
@@ -752,7 +760,8 @@ class db_Handler:
             '''Add a new column to the database!
             
             Args:
-            - Column(str): The name of the column
+            - Column(str): The name of the column, or a list of columns!
+                # Will check if any column name in list exists before adding. Will not add any if any match is found.
             - Value(str/None): The value to fill the empty rows with for the new column. (Default is None)
 
             Settings:
@@ -761,12 +770,31 @@ class db_Handler:
             Notes:
             All rows for this column will be empty. Use mods.EmptyEntryFill() to fill empty values in rows.'''
             global CaseSensativityAmoungColumnNames
+            if type(column) == list:
+                for c in column:
+                    if CaseSensativityAmoungColumnNames:
+                        if c.lower() in [x.lower() for x in self.handler.columnStorage]:
+                            raise Exception('\n\nCall Function: --> db_Handler.Edit.addColumn()\nColumn already exists.')
+                    else:
+                        if c in self.handler.columnStorage:
+                            raise Exception('\n\nCall Function: --> db_Handler.Edit.addColumn()\nColumn already exists.')
+                    self.handler.columnStorage.append(c)
+                    if AutoFillEmptyRows:
+                        self.handler.mods.EmptyEntryFill(column=c, value=value, doesIndexForColumnExist=True)
             if type(column) == str:
-                self.handler.columnStorage.append(column)
-                if AutoFillEmptyRows:
-                    self.handler.mods.EmptyEntryFill(column=column, value=value, doesIndexForColumnExist=True)
-            else:
-                raise Exception('\n\nCall Function: --> db_Handler.Edit.addColumn()\n - Column must be a string.')
+                # Check if column exists:
+                for c in self.handler.columnStorage:
+                    if CaseSensativityAmoungColumnNames:
+                        if c.lower() == column.lower():
+                            raise Exception('\n\nCall Function: --> db_Handler.Edit.addColumn()\nColumn already exists.')
+                    else:
+                        if c == column:
+                            raise Exception('\n\nCall Function: --> db_Handler.Edit.addColumn()\nColumn already exists.')
+                    self.handler.columnStorage.append(column)
+                    if AutoFillEmptyRows:
+                        self.handler.mods.EmptyEntryFill(column=column, value=value, doesIndexForColumnExist=True)
+                else:
+                    raise Exception('\n\nCall Function: --> db_Handler.Edit.addColumn()\n - Column must be a string.')
         
         def removeColumn(self, column):
             '''Removes a column from the database!
@@ -802,15 +830,25 @@ class db_Handler:
             else:
                 raise Exception('\n\nCall Function: --> db_Handler.Edit.removeRow()\nIndex must be an integer.')
         
-        def addRow(self, row):
-            '''Add a new row to the database! Give me a list of data to add. The list cannot be longer or shorter than the column count.'''
+        def addRow(self, row, quickSave=True):
+            '''Add a new row to the database! Give me a list of data to add. The list cannot be longer or shorter than the column count.
+            
+            Args:
+            - Row(list): The data to add to the row. Must be a list.
+            - quickSave(bool): Add rows to tempFile. (Only Use If Speed Is A Requirment)'''
             if len(row) == len(self.handler.columnStorage):
                 if type(row) == list:
+                    if quickSave:
+                        try:
+                            globals()['TempRowFile'+str(self.handler.tag)].write(str(row)+'\n')
+                        except:
+                            # Make file then write
+                            globals()['TempRowFile'+str(self.handler.tag)] = open('TempRowFile'+str(self.handler.tag), 'w')
+                            globals()['TempRowFile'+str(self.handler.tag)].write(str(row)+'\n')
                     self.handler.listStorage.append(row)
                     return
                 else:
                     raise Exception('\n\nCall Function: --> db_Handler.Edit.addRow()\nRow must be a list. Please and thank you.')
-                raise Exception('\n\nCall Function: --> db_Handler.Edit.addRow()\nAn unknown error happened :(')
             else:
                 raise Exception('\n\nCall Function: --> db_Handler.Edit.addRow()\nRow length must be the same as the column length.')
     
@@ -1346,6 +1384,26 @@ class db_Handler:
         def __init__(self, handler):
             self.handler = handler
 
+        def mergeTempRowFile(self):
+            '''Merges the tempRowFile with the main database file.'''
+            # Close TempFile
+            try:
+                globals()['TempRowFile'+str(self.handler.tag)].close()
+            except:
+                # Already Closed/Doesn't exist
+                pass
+            # Check if file exists
+            if os.path.exists('TempRowFile'+str(self.handler.tag[0])+'.txt'):
+                # Open tempFile
+                with open('TempRowFile'+str(self.handler.tag[0])+'.txt', 'r') as f:
+                    tempFile = f.readlines()
+                    f.close()
+                # Add lines to self.handler.listStorage
+                for line in tempFile:
+                    self.handler.listStorage.append(eval(line))
+                # Remove tempFile
+                os.remove('TempRowFile'+str(self.handler.tag[0])+'.txt')
+
         def all(self):
             '''Saves the entire db instance. This includes all data, rows/columns, and meta data.'''
             global lastDatabaseSaved, userPw_ChangesEachSave, EncryptSaveFile, LoginKey
@@ -1359,7 +1417,7 @@ class db_Handler:
             # Check if file exists
             if os.path.exists('db_'+str(self.handler.tag[0])+'.txt'):
                 # Check if folder exists
-                if not os.path.exists('Backups'):
+                if not os.path.exists('db_'+str(self.handler.tag[0])+'_Backups'):
                     os.mkdir('db_'+str(self.handler.tag[0])+'_Backups')
                 backup_folder = 'db_' + str(self.handler.tag[0]) + '_Backups'
                 if not os.path.exists(backup_folder):
@@ -1384,23 +1442,41 @@ class db_Handler:
                 out = str(self.handler.encryption.uniqueIDGen(maxKeyLength=50, password=str(LoginKey), consistantOutput=True))
                 print('ID:', out)
             
-            with open(saveNm, 'w') as f:
-                f.write('tag = '+str(self.handler.tag)+'\n')
-                for item in svList:
-                    actual_value = getattr(self.handler, item)
-                    line = (item + ' = ' + str(actual_value) +'\n')
-                    f.write(self.handler.encryption.en(input=line, uniqueID=out))
-                if userPw_ChangesEachSave:
-                    line = ('userPW = "'+str(self.handler.encryption.uniqueIDGen(maxKeyLength=50, password='EncryptionKey', consistantOutput=False))+'"\n')
-                    f.write(self.handler.encryption.en(input=line, uniqueID=out))
-                else:
-                    line = ('userPW = "'+str(self.handler.userPW)+'"\n')
-                    f.write(self.handler.encryption.en(input=line, uniqueID=out))
+                with open(saveNm, 'w') as f:
+                    f.write('tag = '+str(self.handler.tag)+'\n')
+                    for item in svList:
+                        actual_value = getattr(self.handler, item)
+                        line = (item + ' = ' + str(actual_value) +'\n')
+                        f.write(self.handler.encryption.en(input=line, uniqueID=out))
+                    if userPw_ChangesEachSave:
+                        line = ('userPW = "'+str(self.handler.encryption.uniqueIDGen(maxKeyLength=50, password='EncryptionKey', consistantOutput=False))+'"\n')
+                        f.write(self.handler.encryption.en(input=line, uniqueID=out))
+                    else:
+                        line = ('userPW = "'+str(self.handler.userPW)+'"\n')
+                        f.write(self.handler.encryption.en(input=line, uniqueID=out))
 
-                f.write('')
-                f.close()
+                    f.write('')
+                    f.close()
+            if not EncryptSaveFile:
+                with open(saveNm, 'w') as f:
+                    f.write('tag = '+str(self.handler.tag)+'\n')
+                    for item in svList:
+                        actual_value = getattr(self.handler, item)
+                        f.write(item + ' = ' + str(actual_value) +'\n')
+                    if userPw_ChangesEachSave:
+                        line = ('userPW = "'+str(self.handler.encryption.uniqueIDGen(maxKeyLength=50, password='EncryptionKey', consistantOutput=False))+'"\n')
+                        f.write(line)
+                    else:
+                        line = ('userPW = "'+str(self.handler.userPW)+'"\n')
+                        f.write(line)
+                    f.write('')
+                    f.close()
 
-            
+            # Verify TempRowFile is removed:
+            try:
+                os.remove('TempRowFile'+str(self.handler.tag[0])+'.txt')
+            except:
+                pass
             # All done!
             lastDatabaseSaved = saveNm
             print('Database saved as:', saveNm)
@@ -1434,11 +1510,15 @@ class db_Handler:
         - known users
         - permissions
         - allowedPermissions
-        - userPW'''
+        - userPW
+        
+        Returns:
+        False: If the database savefile requested does not exist'''
         global LoginKey, decryptSaveOnLoad, databasesLoaded
         # if db save file exists, then check if it's encrypted
         if os.path.exists('db_'+str(tag)+'.txt') == False:
             print('Ignoring load, as save file does not exist.')
+            return False
         else:
             SaveEnc = self.CheckIfSaveIsEncrypted(tag=tag)
             # If password is specified, decrypt the save file first
@@ -1596,3 +1676,7 @@ class db_Handler:
 # Patch Notes for this version of the handler: 0.1.3
 # 1) Added new setting: loadDBOnEachStartup
     # - Simplifies the process of loading a database on each startup.
+# 2) Added quickSave argument to AddRow function.
+    # - Used for apps that will be adding constant rows, but cannot afford the power needed to save after each if redundency is needed.
+    # - .makeRowTmpFile() Should be called before use. Not required.
+    
