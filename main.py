@@ -10,10 +10,12 @@ decryptSaveOnLoad = False # Default False
 EncryptionKey='userPW'
 LoginKey = 'Taco'
 EncryptSaveFile = False
-loadDBOnEachStartup = '' # Database tag. If == '', will ignore. Default ''
+loadDBOnEachStartup = 'SERV' # Database tag. If == '', will ignore. Default ''
 
 # Debug Settings:
-showArgsOnFunctionCall = True # Default False
+showArgsOnFunctionCall = False # Default False
+# Show Working Working Path
+showWorkingPath = False # Default False
 '''Create the instance, and you're ready to go! No need to call the load or create functions. They are automatically called. Only works for first instance creation.'''
 
 #Grouped Files
@@ -28,7 +30,8 @@ showArgsOnFunctionCall = True # Default False
 # -------------------------------------------------------------- #
 import os, sys, shutil, random, time, hashlib, builtins, datetime, zipfile, uuid
 sys.set_int_max_str_digits(1000000) # Set the max digits for integers to 1,000,000
-print('Current Path Set:', os.getcwd())
+if showWorkingPath:
+    print('Current Path Set:', os.getcwd())
 #os.chdir('App')
 print('Current Version: 0.1.3')
 print(f"Python Version: {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}.{sys.version_info.releaselevel}")
@@ -91,7 +94,8 @@ class db_Handler:
         self.info = [True]
         # Global Temp Var Identifier
         self.tag = [str(generateNextIncrement())] # Makes self tag unique for each database, temp vars don't colide this way.
-        
+        '''Ensure tag is being pulled with tag[0]. You forget to do this alot.'''
+
         # Data
         self.columnStorage = []
         # List Storage
@@ -123,17 +127,18 @@ class db_Handler:
         self.backup = self.Backup(self)
 
         if loadDBOnEachStartup != '':
+            self.tag = [loadDBOnEachStartup]
             self.load(loadDBOnEachStartup)
             self.mkGlobalTempVars()
     
     def assignTemp(self, value):
-        var = ('TempVar'+str(self.tag))
+        var = ('TempVar'+str(self.tag[0]))
         globals()[var] = value
     def returnTemp(self):
-        var = ('TempVar'+str(self.tag))
+        var = ('TempVar'+str(self.tag[0]))
         return globals()[var]
     def mkGlobalTempVars(self):
-        newVar = ('TempVar'+str(self.tag))
+        newVar = ('TempVar'+str(self.tag[0]))
         globals()[newVar] = None
     def create(self, tag=None):
         '''Used to setup a database. Required if user accounts will be used.
@@ -145,7 +150,7 @@ class db_Handler:
         self.userPW = self.encryption.uniqueIDGen(maxKeyLength=50, password='EncryptionKey', consistantOutput=False)
     def makeRowTmpFile(self):
         '''Creates a temporary file for rows.'''
-        globals()['TempRowFile'+str(self.tag)] = open('TempRowFile'+str(self.tag)+'.txt', 'w')
+        globals()['TempRowFile'+str(self.tag[0])] = open('TempRowFile'+str(self.tag[0])+'.txt', 'w')
     
     class MaliciosActivityLogger:
         '''This class is only used/called when data between variables doesn't match and may be a sign of malicios activity.
@@ -840,11 +845,11 @@ class db_Handler:
                 if type(row) == list:
                     if quickSave:
                         try:
-                            globals()['TempRowFile'+str(self.handler.tag)].write(str(row)+'\n')
+                            globals()['TempRowFile'+str(self.handler.tag[0])].write(str(row)+'\n')
                         except:
                             # Make file then write
-                            globals()['TempRowFile'+str(self.handler.tag)] = open('TempRowFile'+str(self.handler.tag), 'w')
-                            globals()['TempRowFile'+str(self.handler.tag)].write(str(row)+'\n')
+                            globals()['TempRowFile'+str(self.handler.tag[0])] = open('TempRowFile'+str(self.handler.tag[0]), 'w')
+                            globals()['TempRowFile'+str(self.handler.tag[0])].write(str(row)+'\n')
                     self.handler.listStorage.append(row)
                     return
                 else:
@@ -1333,12 +1338,12 @@ class db_Handler:
             - dB backups with tag does not exist.
             - Cannot backup unloaded database.'''
             # Check if folder exists
-            if not os.path.exists('db_'+str(tag)+'_Backups'):
+            if not os.path.exists('db_'+str(tag[0])+'_Backups'):
                 raise Exception('\n\nCall Function: --> db_Handler.Backup.clearBackups()\nDatabase backups with tag does not exist.')
             # Get all files in folder
-            files = os.listdir('db_'+str(tag)+'_Backups')
+            files = os.listdir('db_'+str(tag[0])+'_Backups')
             # Change directory to folder
-            os.chdir('db_'+str(tag)+'_Backups')
+            os.chdir('db_'+str(tag[0])+'_Backups')
             # Remove all files, except the latest one if exemptOne is True
             if exemptOne:
                 for file in files:
@@ -1388,7 +1393,7 @@ class db_Handler:
             '''Merges the tempRowFile with the main database file.'''
             # Close TempFile
             try:
-                globals()['TempRowFile'+str(self.handler.tag)].close()
+                globals()['TempRowFile'+str(self.handler.tag[0])].close()
             except:
                 # Already Closed/Doesn't exist
                 pass
@@ -1443,7 +1448,7 @@ class db_Handler:
                 print('ID:', out)
             
                 with open(saveNm, 'w') as f:
-                    f.write('tag = '+str(self.handler.tag)+'\n')
+                    f.write('tag = '+str(self.handler.tag[0])+'\n')
                     for item in svList:
                         actual_value = getattr(self.handler, item)
                         line = (item + ' = ' + str(actual_value) +'\n')
@@ -1459,7 +1464,7 @@ class db_Handler:
                     f.close()
             if not EncryptSaveFile:
                 with open(saveNm, 'w') as f:
-                    f.write('tag = '+str(self.handler.tag)+'\n')
+                    f.write('tag = '+str(self.handler.tag[0])+'\n')
                     for item in svList:
                         actual_value = getattr(self.handler, item)
                         f.write(item + ' = ' + str(actual_value) +'\n')
@@ -1516,7 +1521,7 @@ class db_Handler:
         False: If the database savefile requested does not exist'''
         global LoginKey, decryptSaveOnLoad, databasesLoaded
         # if db save file exists, then check if it's encrypted
-        if os.path.exists('db_'+str(tag)+'.txt') == False:
+        if os.path.exists('db_'+str(tag[0])+'.txt') == False:
             print('Ignoring load, as save file does not exist.')
             return False
         else:
@@ -1615,6 +1620,7 @@ class db_Handler:
                                 f.close()
                             databasesLoaded.append(self.tag[0])
                             print('Database loaded:', saveNm)
+                            True
                         else:
                             raise Exception('\n\nCall Function: --> db_Handler.load()\nDatabase save file does not exist.')
     
@@ -1635,14 +1641,14 @@ class db_Handler:
             tag = self.tag[0]
         # Grab a line from the save file, The first line should be the tag, and not encrypted, the second line if not encrypted, should be a variable assinged to a value called columnStorage.
         # Calculate the total number of lines in the file
-        with open('db_'+str(tag)+'.txt', 'r') as file:
+        with open('db_'+str(tag[0])+'.txt', 'r') as file:
             total_lines = sum(1 for line in file)
 
         # Calculate x (half of the total lines, rounded up)
         x = -(-total_lines // 2)  # Using integer division rounding up
 
         # Iterate through the file up to x lines
-        with open('db_'+str(tag)+'.txt', 'r') as file:
+        with open('db_'+str(tag[0])+'.txt', 'r') as file:
             for i, line in enumerate(file):
                 if i >= x:
                     break  # Stop after x lines
@@ -1679,4 +1685,3 @@ class db_Handler:
 # 2) Added quickSave argument to AddRow function.
     # - Used for apps that will be adding constant rows, but cannot afford the power needed to save after each if redundency is needed.
     # - .makeRowTmpFile() Should be called before use. Not required.
-    
