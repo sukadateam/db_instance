@@ -10,7 +10,9 @@ decryptSaveOnLoad = False # Default False
 EncryptionKey='userPW'
 LoginKey = 'Taco'
 EncryptSaveFile = False
-loadDBOnEachStartup = 'SERV' # Database tag. If == '', will ignore. Default ''
+loadDBOnEachStartup = '' # Database tag. If == '', will ignore. Default ''
+bypassAdminAccountCreation = True # Default False
+'''Allows the creation of accounts without the need of an admin account after the first account. Default False'''
 
 # Debug Settings:
 showArgsOnFunctionCall = False # Default False
@@ -286,7 +288,7 @@ class db_Handler:
             return False
         
         def permissionsAllowed(self, perm):
-            '''Checks wether a permission is allowed to be used.
+            '''Checks wether a permission is allowed to be used. Checks against (allowedPermissions)
             Retuns:
             - True: Allowed
             - False: Not allowed'''
@@ -322,8 +324,8 @@ class db_Handler:
             Args:
             - name(str): (name) to check
             Returns: 
-            - Name In use: False
-            - Name Not in use: True'''
+             - Name In use: False
+             - Name Not in use: True'''
             cList = self.handler.knownUsers # Check List
             for user in cList:
                 if user[0] == name:
@@ -343,6 +345,24 @@ class db_Handler:
                     return False
             return True
         
+        def genNextId(self, length=8):
+            '''Generate the next ID for a user. Useful for automated user creation if needed.
+            
+            Args:
+            - length(int): Length of the ID to generate. Default is 8.
+
+            Returns:
+            - randomID(str): The generated ID.'''
+            # Generate a random ID, with 8 random numbers
+            while True:
+                randomID = ''
+                for i in range(length):
+                    randomID += str(random.randint(0, 9))
+                # Check to see if the ID is in use
+                if self.checkIDInUse(randomID):
+                    break
+            return randomID
+            
         def create(self, name, passw, permission, id):
             '''Create a user. Requires admin permissions to create a user, unless no users exist. After the first user is created, only the admins can modify users.
             
@@ -351,6 +371,7 @@ class db_Handler:
             - passw(str): Password
             - permission(str): Permission
             - id(str): Refference ID, Must be unique to the account, cannot be used more than once. Checks are done.'''
+            global bypassAdminAccountCreation
             # Will use db_Handler to store user data
             # Encryption will be managed by db_Handler.Encryption.en()
             # Check Arguments
@@ -374,12 +395,14 @@ class db_Handler:
             # Check if permissions are required for user creation.
             # Start with checking current user logged:
             checkPass = False
+            if bypassAdminAccountCreation:
+                checkPass = True
             # If no users are created yet, and no user is logged in, bypass verifacation.
             if self.handler.knownUsers == [] and self.handler.permissions == []:
                 if self.handler.userLogged == []:
                     checkPass = True
             else:
-                if self.handler.userLogged == []:
+                if self.handler.userLogged == [] and bypassAdminAccountCreation == False:
                     # A user logged in, and with admin permissions is required for creation, so throw Exception.
                     raise Exception('A user needs to be signed in with a admin role to create a user.')
                 
@@ -1483,20 +1506,25 @@ class db_Handler:
                 # Check if folder exists
                 if not os.path.exists('db_'+str(self.handler.tag[0])+'_Backups'):
                     os.mkdir('db_'+str(self.handler.tag[0])+'_Backups')
+                # Set backup folder var
                 backup_folder = 'db_' + str(self.handler.tag[0]) + '_Backups'
+                # Check if backup folder exists
                 if not os.path.exists(backup_folder):
                     os.mkdir(backup_folder)
+                # Get files in folder
                 backup_files = os.listdir(backup_folder)
+                # Count total amount of files in folder
                 num_files = len(backup_files)
                 # Make the name for our backup file
                 saveNmBk = 'db_'+str(num_files)+'_'+str(self.handler.tag[0])+'.txt'
+                # Rename save file as a backup
                 os.rename(saveNm, saveNmBk)
+                # Move new backup to backup folder
                 backup_file = os.path.join(backup_folder, saveNmBk)
                 shutil.copyfile(saveNmBk, backup_file)
 
-                # Then, Delete the save file
+                # Then, Delete the backup file
                 os.remove(saveNmBk)
-            
             # Now, we save the database.
             svList = ['columnStorage', 'listStorage', 'owner', 'knownUsers', 'permissions', 'allowedPermissions']
             if EncryptSaveFile:
@@ -1518,12 +1546,12 @@ class db_Handler:
                     else:
                         line = ('userPW = "'+str(self.handler.userPW)+'"\n')
                         f.write(self.handler.encryption.en(input=line, uniqueID=out))
-
                     f.write('')
                     f.close()
             if not EncryptSaveFile:
                 with open(saveNm, 'w') as f:
-                    f.write('tag = '+str(self.handler.tag[0])+'\n')
+                    # This line requires no index as the brackets are required for loading.
+                    f.write('tag = '+str(self.handler.tag)+'\n')
                     for item in svList:
                         actual_value = getattr(self.handler, item)
                         f.write(item + ' = ' + str(actual_value) +'\n')
@@ -1593,95 +1621,98 @@ class db_Handler:
                 # Key for encryption, can be recreated by using the same password. Will be required for decryption.
                 out = str(self.encryption.uniqueIDGen(maxKeyLength=50, password=str(LoginKey), consistantOutput=True))
             
-                # Check excusable variables
-                allowedExcuses = ['columnStorage', 'listStorage', 'tag', 'owner', 'knownUsers', 'permissions', 'userLogged', 'allowedPermissions', 'userPW']
-                for i in range(len(excuse)):
-                    if excuse[i] not in allowedExcuses:
-                        raise Exception('\n\nCall Function: --> db_Handler.load()\nInvalid excuse given. Excuse must be in the list of allowed excuses.')
-                
-                if tag != None:
-                    # Set the tag to the one given
-                    self.tag = [tag]
-                elif tag == None and lastDatabaseSaved != None:
-                    # Set the tag to the last saved database
-                    self.tag = [lastDatabaseSaved]
+        # Check excusable variables
+        allowedExcuses = ['columnStorage', 'listStorage', 'tag', 'owner', 'knownUsers', 'permissions', 'userLogged', 'allowedPermissions', 'userPW']
+        for i in range(len(excuse)):
+            if excuse[i] not in allowedExcuses:
+                raise Exception('\n\nCall Function: --> db_Handler.load()\nInvalid excuse given. Excuse must be in the list of allowed excuses.')
+        
+        if tag != None:
+            # Set the tag to the one given
+            self.tag = [tag]
+        elif tag == None and lastDatabaseSaved != None:
+            # Set the tag to the last saved database
+            self.tag = [lastDatabaseSaved]
+        else:
+            raise Exception('\n\nCall Function: --> db_Handler.load()\nNo tag given, and no database has been saved yet. Unable to automatically determine what to load.')
+        
+        if self.columnStorage != [] or self.listStorage != []:
+            raise Exception('\n\nCall Function: --> db_Handler.load()\nData already exists in this database. Cannot load data into an existing database.')
+        else:
+            # Check if columnStorage and listStorage are empty
+            if self.columnStorage == [] and self.listStorage == []:
+                # Make the name for our save file
+                if tag == None:
+                    saveNm='db_'+str(self.tag[0])+'.txt'
                 else:
-                    raise Exception('\n\nCall Function: --> db_Handler.load()\nNo tag given, and no database has been saved yet. Unable to automatically determine what to load.')
-                
-                if self.columnStorage != [] or self.listStorage != []:
-                    raise Exception('\n\nCall Function: --> db_Handler.load()\nData already exists in this database. Cannot load data into an existing database.')
+                    saveNm='db_'+str(tag[0])+'.txt'
+                # Check if file exists
+                if os.path.exists(saveNm):
+                    # Load the database
+                    if decryptSaveOnLoad and SaveEnc == True:
+                        # Rewrite the save file with the decrypted data from variable (out)
+                        tmpData = ''
+                    with open(saveNm, 'r') as f:
+                        for line in f:
+                            if SaveEnc == True:
+                                if 'tag =' not in line:
+                                    line = self.encryption.en(input=line, uniqueID=out, decrypt=True)
+                                if decryptSaveOnLoad:
+                                    tmpData += str(line)
+                            if ' = ' in line:
+                                # Get the value of the line
+                                value = line.split(' = ')[1]
+                                # Remove the '\n' at the end
+                                value = value.replace('\n', '')
+                                # Get the name of the line
+                                name = line.split(' = ')[0]
+                                # Remove the spaces at the end
+                                name = name.replace(' ', '')
+                                # Set the value to the database
+                                print(value)
+                                # Verify excuses before setting values
+                                if 'tag' not in excuse:
+                                    if name == 'tag':
+                                        self.tag[0] = eval(value)
+                                if 'columnStorage' not in excuse:
+                                    if name == 'columnStorage':
+                                        self.columnStorage = eval(value)
+                                if 'listStorage' not in excuse:
+                                    if name == 'listStorage':
+                                        self.listStorage = eval(value)
+                                if 'owner' not in excuse:
+                                    if name == 'owner':
+                                        self.owner = eval(value)
+                                if 'knownUsers' not in excuse:
+                                    if name == 'knownUsers':
+                                        self.knownUsers = eval(value)
+                                if 'permissions' not in excuse:
+                                    if name == 'permissions':
+                                        self.permissions = eval(value)
+                                if 'allowedPermissions' not in excuse:
+                                    if name == 'allowedPermissions':
+                                        self.allowedPermissions = eval(value)
+                                if 'userPW' not in excuse:
+                                    if name == 'userPW':
+                                        self.userPW = int(eval(value))
+                            else:
+                                raise Exception('\n\nCall Function: --> db_Handler.load()\nInvalid data in save file. Unable to load database. Please check the save file for corruption.')
+                    try:
+                        # if the tag within the list (tag) is a list in a list, remove the within list.
+                        # Fixes the issue of the tag being a list within a list.
+                        if type(self.tag[0]) == list:
+                            self.tag = self.tag[0]
+                    except:
+                        pass
+                    if decryptSaveOnLoad and SaveEnc == True:
+                        f = open(saveNm, 'w')
+                        f.write(tmpData)
+                        f.close()
+                    databasesLoaded.append(self.tag[0])
+                    print('Database loaded:', saveNm)
+                    True
                 else:
-                    # Check if columnStorage and listStorage are empty
-                    if self.columnStorage == [] and self.listStorage == []:
-                        # Make the name for our save file
-                        saveNm='db_'+str(self.tag[0])+'.txt'
-                        # Check if file exists
-                        if os.path.exists(saveNm):
-                            # Load the database
-                            if decryptSaveOnLoad and SaveEnc == True:
-                                # Rewrite the save file with the decrypted data from variable (out)
-                                tmpData = ''
-                            with open(saveNm, 'r') as f:
-                                for line in f:
-                                    if SaveEnc == True:
-                                        if 'tag =' not in line:
-                                            line = self.encryption.en(input=line, uniqueID=out, decrypt=True)
-                                        if decryptSaveOnLoad:
-                                            tmpData += str(line)
-                                    if ' = ' in line:
-                                        # Get the value of the line
-                                        value = line.split(' = ')[1]
-                                        # Remove the '\n' at the end
-                                        value = value.replace('\n', '')
-                                        # Get the name of the line
-                                        name = line.split(' = ')[0]
-                                        # Remove the spaces at the end
-                                        name = name.replace(' ', '')
-                                        # Set the value to the database
-
-                                        # Verify excuses before setting values
-                                        if 'tag' not in excuse:
-                                            if name == 'tag':
-                                                self.tag[0] = eval(value)
-                                        if 'columnStorage' not in excuse:
-                                            if name == 'columnStorage':
-                                                self.columnStorage = eval(value)
-                                        if 'listStorage' not in excuse:
-                                            if name == 'listStorage':
-                                                self.listStorage = eval(value)
-                                        if 'owner' not in excuse:
-                                            if name == 'owner':
-                                                self.owner = eval(value)
-                                        if 'knownUsers' not in excuse:
-                                            if name == 'knownUsers':
-                                                self.knownUsers = eval(value)
-                                        if 'permissions' not in excuse:
-                                            if name == 'permissions':
-                                                self.permissions = eval(value)
-                                        if 'allowedPermissions' not in excuse:
-                                            if name == 'allowedPermissions':
-                                                self.allowedPermissions = eval(value)
-                                        if 'userPW' not in excuse:
-                                            if name == 'userPW':
-                                                self.userPW = int(eval(value))
-                                    else:
-                                        raise Exception('\n\nCall Function: --> db_Handler.load()\nInvalid data in save file. Unable to load database. Please check the save file for corruption.')
-                            try:
-                                # if the tag within the list (tag) is a list in a list, remove the within list.
-                                # Fixes the issue of the tag being a list within a list.
-                                if type(self.tag[0]) == list:
-                                    self.tag = self.tag[0]
-                            except:
-                                pass
-                            if decryptSaveOnLoad and SaveEnc == True:
-                                f = open(saveNm, 'w')
-                                f.write(tmpData)
-                                f.close()
-                            databasesLoaded.append(self.tag[0])
-                            print('Database loaded:', saveNm)
-                            True
-                        else:
-                            raise Exception('\n\nCall Function: --> db_Handler.load()\nDatabase save file does not exist.')
+                    raise Exception('\n\nCall Function: --> db_Handler.load()\nDatabase save file does not exist.')
     
     def dataLoadingIssueDetection():
         '''Scans a selected save file for errors or possible corruption. Called automatically before a database loads, and/or if a save file fails to load.
@@ -1744,5 +1775,7 @@ class db_Handler:
 # 2) Added quickSave argument to AddRow function.
     # - Used for apps that will be adding constant rows, but cannot afford the power needed to save after each if redundency is needed.
     # - .makeRowTmpFile() Should be called before use. Not required.
-# 3) Added checkCredentials function to user class.
+# 3) Added checkCredentials() function to user class.
     # - Used to verify credentials of a user
+# 4) Added genNextId() to use class.
+    # - Used to generate the a random available id for a new user.
