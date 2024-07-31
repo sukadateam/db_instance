@@ -480,7 +480,45 @@ class db_Handler:
                 return True
             return True
         
-        def uniqueIDGen(self, randomListSize=15, maxKeyLength=200, luckyNumber=None, password=None, consistantOutput=False):
+        def uniqueIDGen(self, maxKeyLength=200, luckyNumber=None, password=None, consistantOutput=False):
+            '''Testing Phase. This function has not been fully tested. Use at your own risk.'''
+            newID = ""
+            # Check Arguments
+            if luckyNumber is None and password is None:
+                raise ValueError("Both luckyNumber and password cannot be None. Please provide at least one of them.")
+            if luckyNumber is not None and password is not None:
+                raise ValueError("Both luckyNumber and password cannot be provided. Please provide only one of them.")
+            if maxKeyLength < 4:
+                raise ValueError("maxKeyLength must be greater than 4.")
+            if not isinstance(maxKeyLength, int):
+                raise ValueError("maxKeyLength must be an integer.")
+            if not isinstance(consistantOutput, bool):
+                raise ValueError("consistantOutput must be a boolean.")
+            if not isinstance(luckyNumber, int) and luckyNumber is not None:
+                raise ValueError("luckyNumber must be an integer.")
+            if not isinstance(password, str) and password is not None:
+                raise ValueError("password must be a string.")
+            if password is not None:
+                # Use hashing to generate a unique number from password
+                hash_object = hashlib.sha256(password.encode()) 
+                # Convert the hash to an integer
+                experimental_number = int(hash_object.hexdigest(), 16)
+                # Set seed
+                random.seed(experimental_number)
+            else:
+                # Set seed
+                random.seed(luckyNumber)
+            for x in range(maxKeyLength):
+                newID += str(random.randint(0, 9))
+                if consistantOutput:
+                    # Sequentially randomize the seed, based on the newest addition to newID
+                    random.seed(newID[::-1])
+                else:
+                    # Randomize the seed
+                    random.seed()
+            return newID
+
+        def OlduniqueIDGen(self, randomListSize=15, maxKeyLength=200, luckyNumber=None, password=None, consistantOutput=False):
             '''Creates a random Key for encryption. The longer the key, the stronger the encryption. 
             \n The design behind this generator is to create a key that is random, but also a nuicance to decrypt.
             \n
@@ -665,7 +703,6 @@ class db_Handler:
             # Return the key
             return keyOut[1:maxKeyLength-1] # Verify the length of the key is correct
 
-        
         def getNewLineIndicators(self, input):
             '''Gets the indexs of new line indicators within a string. Used for encryption and decryption.
             
