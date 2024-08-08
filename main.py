@@ -161,6 +161,16 @@ class db_Handler:
         '''Creates a temporary file for rows.'''
         globals()['TempRowFile'+str(self.tag[0])] = open('TempRowFile'+str(self.tag[0])+'.txt', 'w')
     
+    def caseManager(input, bool):
+        '''Easy method for caseSensativity.
+        - If True, input is not modified. 
+        - If False input is forced as lower.'''
+        if bool == True:
+            return bool
+        else:
+            return bool.lower()
+
+    
     class MaliciosActivityLogger:
         '''This class is only used/called when data between variables doesn't match and may be a sign of malicios activity.
         This class logs all calls to itself and will take precautions if malicios data is found depending from where it occured.'''
@@ -260,23 +270,31 @@ class db_Handler:
         '''
         def __init__(self, handler):
             self.handler = handler
+
+        def returnAllKnownUsers(self):
+            '''Returns all know users within this database. Only usernames will be returned.'''
+            pass
         
-        def checkCredentials(self, user, passw):
+        def checkCredentials(self, user, passw, caseSensative=True):
             '''Check credentials of a user. 
             \n Returns:
             \n - True: Credentials are Valid
             \n - False: Credentials are Invalid
             '''
             for userS in self.handler.knownUsers:
-                if userS[0] == user:
-                    if userS[1] == passw:
+                if self.handler.caseManager(userS[0], caseSensative) == user:
+                    if self.handler.caseManager(userS[1], caseSensative) == passw:
                         return True
             return False
         
-        def returnUserPerm(self, name):
-            '''Returns the permission of a given user. Returns False if nothing found.'''
+        def returnUserPerm(self, name, caseSensative=True):
+            '''Returns the permission of a given user. Returns False if nothing found.
+            \n
+            \nArgs:
+            \n- caseSensative(bool): If True, checks will be done in a sensative matter.
+            \n        Ex: "Jeff" and "jeff" do not match if True'''
             for x in range(len(self.handler.knownUsers)):
-                if self.handler.knownUsers[x][0] == name:
+                if self.handler.caseManager(self.handler.knownUsers[x][0], caseSensative) == name:
                     return self.handler.permissions[x][0]
             return False
 
@@ -363,14 +381,18 @@ class db_Handler:
                     break
             return randomID
             
-        def create(self, name, passw, permission, id):
+        def create(self, name, passw, permission, id=''):
             '''Create a user. Requires admin permissions to create a user, unless no users exist. After the first user is created, only the admins can modify users.
             
             Args:
             - name(str): Username
             - passw(str): Password
             - permission(str): Permission
-            - id(str): Refference ID, Must be unique to the account, cannot be used more than once. Checks are done.'''
+            - id(str): Refference ID, Must be unique to the account, cannot be used more than once. Checks are done.
+                - If ID is left empty, a random ID will be generated and returned after user creation.
+                
+            Returns:
+            - id(str): If no ID was given and it was automatically created, it will return. This is the only return.'''
             global bypassAdminAccountCreation
             # Will use db_Handler to store user data
             # Encryption will be managed by db_Handler.Encryption.en()
@@ -380,6 +402,11 @@ class db_Handler:
             for item in strList:
                 if not type(locals()[item]) == str:
                     raise Exception(exCall + 'Invalid Argument Type({}), must be string.'.format(str(item)))
+            gendID = False
+            '''If ID was generated automatically, this is set True. Used for return.'''
+            if id == '':
+                gendID = True
+                id = self.genNextId()
             # Verify new permission is allowed
             if not self.permissionsAllowed(permission):
                 raise PermissionError('Argument: (Permission) Invalid Permission')
@@ -416,6 +443,8 @@ class db_Handler:
             if checkPass == True:
                 self.handler.knownUsers.append([name, passw])
                 self.handler.permissions.append([permission, id])
+                if gendID == True:
+                    return id
 
         def remove(self, name):
             '''Remove a user. Requires admin permissions.
@@ -1816,3 +1845,5 @@ class db_Handler:
     # - Used to verify credentials of a user
 # 4) Added genNextId() to use class.
     # - Used to generate the a random available id for a new user.
+# 5) Added caseSensativity to some functions within' users class.
+    # - Not fully done yet tho :(, been really busy with life.
